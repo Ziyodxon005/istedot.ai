@@ -135,18 +135,18 @@ body {
 
 /* === HOLOGRAM CONTAINER === */
 .hologram-container {
-  position: relative;
-  width: 100%;
-  max-width: 400px;
-  aspect-ratio: 3 / 4;
-  border-radius: 50% 50% 5% 5% / 60% 60% 5% 5%;
-  background: linear-gradient(180deg, rgba(0, 243, 255, 0.05) 0%, rgba(212, 175, 55, 0.05) 100%);
-  box-shadow:
-    0 0 50px rgba(212, 175, 55, 0.3),
-    0 0 100px rgba(0, 243, 255, 0.15),
-    inset 0 0 50px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  border: 1px solid rgba(212, 175, 55, 0.3);
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  background: none;
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  z-index: 5;
 }
 
 /* Scanline overlay */
@@ -620,13 +620,16 @@ body {
 
 /* === CHARACTER VIDEO CONTAINER === */
 .character-video-container {
-  width: 252px;
-  height: 252px;
-  border-radius: 50%;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0 !important;
   overflow: hidden;
-  border: 3px solid var(--color-regal-gold);
-  box-shadow: 0 0 40px rgba(212, 175, 55, 0.6), inset 0 0 20px rgba(0, 0, 0, 0.5);
-  background: rgba(5, 19, 43, 0.8);
+  border: none !important;
+  box-shadow: none !important;
+  background: radial-gradient(circle at center, #1a1f35 0%, #020b1c 100%);
   transition: transform 0.1s ease;
 }
 
@@ -1192,17 +1195,21 @@ body {
   }
 
   .hologram-container {
-    width: 85vw;
-    max-width: 340px;
-    aspect-ratio: 3 / 4;
-    padding: 20px;
-    border-radius: 40% 40% 5% 5% / 50% 50% 5% 5%;
+    width: 100vw;
+    max-width: none;
+    aspect-ratio: unset;
+    padding: 0;
+    border-radius: 0;
   }
 
-  /* Video panel - larger and centered */
+  /* Video panel - fullscreen */
   .character-video-container {
-    width: 212px !important;
-    height: 212px !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
   }
 
   /* Name below video */
@@ -1370,13 +1377,17 @@ body {
   }
 
   .hologram-container {
-    width: 90vw;
-    max-width: 300px;
+    width: 100vw;
+    max-width: none;
   }
 
   .character-video-container {
-    width: 172px !important;
-    height: 172px !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    border-radius: 0 !important;
   }
 
   .hologram-container .gold-calligraphy.text-2xl {

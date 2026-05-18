@@ -18,7 +18,7 @@ const HologramStage = ({
     return (
         <motion.div
             className="hologram-container materialize-enter"
-            animate={{ y: [0, -15, 0] }}
+            animate={{ y: 0 }}
             transition={{
                 duration: 4,
                 repeat: Infinity,
@@ -29,46 +29,45 @@ const HologramStage = ({
             {/* Scanning Line (Vision Mode) */}
             {isVisionEnabled && <div className="scanning-line" />}
 
-            {/* Character Display */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-8">
-                {/* General Rasm */}
-                <motion.div
-                    className="character-video-container"
-                    animate={{ scale: 1 + volume * 0.15 }}
-                    transition={{ duration: 0.1 }}
-                    style={{ position: 'relative' }}
-                >
-                    <img
-                        src={GENERAL_IMAGE}
-                        alt="General"
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            transition: 'filter 0.5s ease-in-out',
-                            filter: isLive ? 'none' : 'grayscale(30%) brightness(0.8)',
-                            borderRadius: 'inherit',
-                        }}
-                    />
+            {/* General Rasm - Fullscreen */}
+            <motion.div
+                className="character-video-container"
+                animate={{ scale: 1 + volume * 0.04 }}
+                transition={{ duration: 0.1 }}
+            >
+                <img
+                    src={GENERAL_IMAGE}
+                    alt="General"
+                    style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        objectPosition: 'center center',
+                        display: 'block',
+                        transition: 'filter 0.5s ease-in-out',
+                        filter: isLive ? 'none' : 'grayscale(30%) brightness(0.8)',
+                    }}
+                />
+            </motion.div>
 
-                    {/* Invisible spacer to maintain container size */}
-                    <div style={{ width: '100%', paddingBottom: '100%' }} />
-                </motion.div>
-
-                {/* Character Name */}
-                <h2 className="gold-calligraphy text-2xl mt-6 text-center">
+            {/* Overlay: Character Name + Status (bottom center) */}
+            <div style={{
+                position: 'fixed',
+                bottom: '120px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                textAlign: 'center',
+                zIndex: 30,
+                pointerEvents: 'none',
+            }}>
+                <h2 className="gold-calligraphy text-2xl">
                     {personaName || 'Andijon IIB Maslahatchisi'}
                 </h2>
-
-                {/* Status Text */}
-                <p className="text-xs tracking-widest mt-4" style={{ color: isLive ? '#00f3ff' : '#666' }}>
+                <p className="text-xs tracking-widest mt-4" style={{ color: isLive ? '#00f3ff' : '#666', marginTop: '10px' }}>
                     {isLive
                         ? (personaState === 'speaking' || personaState === 'greeting'
                             ? 'JAVOB BERILMOQDA'
-                            : (isVisionEnabled ? 'KO\'RISH FAOL' : 'ESHITILMOQDA'))
+                            : (isVisionEnabled ? "KO'RISH FAOL" : 'ESHITILMOQDA'))
                         : 'ULANMOQDA...'}
                 </p>
             </div>
