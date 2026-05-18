@@ -29,7 +29,7 @@ const HologramStage = ({
             {/* Scanning Line (Vision Mode) */}
             {isVisionEnabled && <div className="scanning-line" />}
 
-            {/* General Rasm - Fullscreen */}
+            {/* Character Image */}
             <motion.div
                 className="character-video-container"
                 animate={{ scale: 1 + volume * 0.04 }}
@@ -50,20 +50,20 @@ const HologramStage = ({
                 />
             </motion.div>
 
-            {/* Overlay: Character Name + Status (bottom center) */}
-            <div style={{
-                position: 'fixed',
-                bottom: '120px',
-                left: '50%',
-                transform: 'translateX(-50%)',
+            {/* Name + Status — below image */}
+            <div className="persona-name-status" style={{
                 textAlign: 'center',
+                padding: '10px 0 4px',
                 zIndex: 30,
                 pointerEvents: 'none',
             }}>
                 <h2 className="gold-calligraphy text-2xl">
                     {personaName || 'Andijon IIB Maslahatchisi'}
                 </h2>
-                <p className="text-xs tracking-widest mt-4" style={{ color: isLive ? '#00f3ff' : '#666', marginTop: '10px' }}>
+                <p className="text-xs tracking-widest" style={{
+                    color: isLive ? '#00f3ff' : '#666',
+                    marginTop: '6px',
+                }}>
                     {isLive
                         ? (personaState === 'speaking' || personaState === 'greeting'
                             ? 'JAVOB BERILMOQDA'
