@@ -8,6 +8,7 @@ export class GeminiLiveClient {
         this.onClose = null;
         this.onError = null;
         this.onTurnComplete = null;
+        this.onInterrupted = null;
     }
 
     connect(systemInstruction, voiceName = 'Kore') {
@@ -27,7 +28,6 @@ export class GeminiLiveClient {
             if (data instanceof Blob) {
                 data = await data.text();
             }
-
             try {
                 const response = JSON.parse(data);
                 this.handleMessage(response);
@@ -63,6 +63,20 @@ export class GeminiLiveClient {
                 },
                 system_instruction: {
                     parts: [{ text: systemInstruction }]
+                },
+                tools: [
+                    {
+                        google_search: {}
+                    }
+                ],
+                realtime_input_config: {
+                    automatic_activity_detection: {
+                        disabled: false,
+                        start_of_speech_sensitivity: "START_SENSITIVITY_HIGH",
+                        end_of_speech_sensitivity: "END_SENSITIVITY_HIGH",
+                        prefix_padding_ms: 20,
+                        silence_duration_ms: 500
+                    }
                 }
             }
         };
@@ -73,12 +87,7 @@ export class GeminiLiveClient {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             const msg = {
                 realtime_input: {
-                    media_chunks: [
-                        {
-                            mime_type: "audio/pcm;rate=16000",
-                            data: base64Audio
-                        }
-                    ]
+                    media_chunks: [{ mime_type: "audio/pcm;rate=16000", data: base64Audio }]
                 }
             };
             this.ws.send(JSON.stringify(msg));
@@ -89,12 +98,7 @@ export class GeminiLiveClient {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             const msg = {
                 realtime_input: {
-                    media_chunks: [
-                        {
-                            mime_type: "image/jpeg",
-                            data: base64Image
-                        }
-                    ]
+                    media_chunks: [{ mime_type: "image/jpeg", data: base64Image }]
                 }
             };
             this.ws.send(JSON.stringify(msg));
@@ -105,10 +109,7 @@ export class GeminiLiveClient {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             const msg = {
                 client_content: {
-                    turns: [{
-                        role: "user",
-                        parts: [{ text: text }]
-                    }],
+                    turns: [{ role: "user", parts: [{ text: text }] }],
                     turn_complete: true
                 }
             };
@@ -117,13 +118,18 @@ export class GeminiLiveClient {
     }
 
     handleMessage(response) {
+        // AI interrupted (user spoke over it)
+        if (response.serverContent?.interrupted) {
+            console.log('⚡ AI interrupted by user');
+            if (this.onInterrupted) this.onInterrupted();
+            return;
+        }
+
         if (response.serverContent && response.serverContent.modelTurn) {
             const parts = response.serverContent.modelTurn.parts;
             for (const part of parts) {
                 if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
-                    if (this.onAudioData) {
-                        this.onAudioData(part.inlineData.data);
-                    }
+                    if (this.onAudioData) this.onAudioData(part.inlineData.data);
                 }
             }
         }

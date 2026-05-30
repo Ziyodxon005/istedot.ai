@@ -91,18 +91,16 @@ export function useGeminiLive() {
                     setIsAISpeaking(false);
                     setPersonaState('idle');
                     isGreetingRef.current = false;
-                }, 500);
+                }, 150);
             };
 
             // When AI finishes turn - immediately unlock mic
             client.onTurnComplete = () => {
                 if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
-                setTimeout(() => {
-                    isAISpeakingRef.current = false;
-                    setIsAISpeaking(false);
-                    setPersonaState('idle');
-                    isGreetingRef.current = false;
-                }, 300);
+                isAISpeakingRef.current = false;
+                setIsAISpeaking(false);
+                setPersonaState('idle');
+                isGreetingRef.current = false;
             };
 
             client.onOpen = async () => {

@@ -33,7 +33,7 @@ export class AudioStreamer {
             class PCMProcessor extends AudioWorkletProcessor {
               constructor() {
                 super();
-                this.bufferSize = 4096;
+                this.bufferSize = 2048;
               }
               process(inputs, outputs, parameters) {
                 const input = inputs[0];
