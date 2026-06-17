@@ -10,6 +10,8 @@ export function useGeminiLive() {
     const [permissionError, setPermissionError] = useState(null);
     const [personaState, setPersonaState] = useState('idle');
     const [isAISpeaking, setIsAISpeaking] = useState(false);
+    const [analysisData, setAnalysisData] = useState(null);
+    const [turnCount, setTurnCount] = useState(0);
 
     const clientRef = useRef(null);
     const audioStreamerRef = useRef(new AudioStreamer());
@@ -18,11 +20,17 @@ export function useGeminiLive() {
     const visionTimeoutRef = useRef(null);
     const isMicMutedRef = useRef(false);
     const isAISpeakingRef = useRef(false);
+    const isConnectingRef = useRef(false);
     const greetingSentRef = useRef(false);
+    const turnCountRef = useRef(0);
+    const isEndingRef = useRef(false); // Track if we are waiting for the final analysis
+    const userSpokeRef = useRef(false);  // tracks real Q&A exchanges
     const speakingTimeoutRef = useRef(null);
     const isGreetingRef = useRef(false);
-    const currentApiKeyRef = useRef(1);
+    const currentKeyIndexRef = useRef(0);
     const pendingReconnectRef = useRef(null);
+    const textBufferRef = useRef('');
+    const onAnalysisReadyRef = useRef(null);
 
     useEffect(() => {
         let interval;
@@ -50,19 +58,56 @@ export function useGeminiLive() {
         }
     }, []);
 
-    const connect = useCallback(async (apiKey, systemInstruction, voiceName = 'Kore', isRetry = false) => {
-        // Only reset greeting for completely new session (not retries)
-        if (!isRetry) greetingSentRef.current = false;
-        pendingReconnectRef.current = { systemInstruction, voiceName };
+    // Parse analysis JSON from accumulated text
+    const tryParseAnalysis = useCallback((text) => {
+        const startMarker = '[ANALYSIS_DATA]';
+        const endMarker = '[/ANALYSIS_DATA]';
+        const startIdx = text.indexOf(startMarker);
+        const endIdx = text.indexOf(endMarker);
 
-        let activeApiKey = apiKey;
-        if (isRetry && currentApiKeyRef.current === 1) {
-            const secondKey = import.meta.env.VITE_GEMINI_API_KEY2;
-            if (secondKey) {
-                currentApiKeyRef.current = 2;
-                activeApiKey = secondKey;
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            const jsonStr = text.slice(startIdx + startMarker.length, endIdx).trim();
+            try {
+                const parsed = JSON.parse(jsonStr);
+                console.log('Analysis data parsed successfully!', parsed);
+                setAnalysisData(parsed);
+                if (onAnalysisReadyRef.current) {
+                    onAnalysisReadyRef.current(parsed);
+                }
+                return true;
+            } catch (e) {
+                console.error('Failed to parse analysis JSON:', e);
+                return false;
             }
         }
+        return false;
+    }, []);
+
+    const connect = useCallback(async (initialApiKey, systemInstruction, voiceName = 'Aoede', isRetry = false, onAnalysisReady = null) => {
+        // Prevent double-connect (React StrictMode or rapid calls)
+        if (isConnectingRef.current && !isRetry) {
+            console.log('connect() skipped — already connecting');
+            return;
+        }
+        isConnectingRef.current = true;
+
+        if (!isRetry) greetingSentRef.current = false;
+        if (onAnalysisReady) onAnalysisReadyRef.current = onAnalysisReady;
+        pendingReconnectRef.current = { systemInstruction, voiceName };
+        textBufferRef.current = '';
+
+        const ALL_KEYS = [
+            import.meta.env.VITE_GEMINI_API_KEY1,
+            import.meta.env.VITE_GEMINI_API_KEY2,
+            import.meta.env.VITE_GEMINI_API_KEY3,
+            import.meta.env.VITE_GEMINI_API_KEY4
+        ].filter(Boolean); // Only keep the ones that are defined
+
+        if (isRetry) {
+            currentKeyIndexRef.current = (currentKeyIndexRef.current + 1) % ALL_KEYS.length;
+        }
+        const activeApiKey = ALL_KEYS[currentKeyIndexRef.current];
+
 
         try {
             const hasMicPermission = await requestMicPermission();
@@ -71,7 +116,6 @@ export function useGeminiLive() {
                 return;
             }
 
-            // Fresh AudioStreamer for each new connection
             audioStreamerRef.current.stop();
             audioStreamerRef.current = new AudioStreamer();
 
@@ -81,8 +125,6 @@ export function useGeminiLive() {
                 audioStreamerRef.current?.playAudioChunk(base64Audio);
                 setIsAISpeaking(true);
                 setPersonaState(isGreetingRef.current ? 'greeting' : 'speaking');
-
-                // Block mic while AI is speaking (echo prevention)
                 isAISpeakingRef.current = true;
 
                 if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
@@ -91,33 +133,83 @@ export function useGeminiLive() {
                     setIsAISpeaking(false);
                     setPersonaState('idle');
                     isGreetingRef.current = false;
-                }, 150);
+                }, 800);
             };
 
-            // When AI finishes turn - immediately unlock mic
+            // Capture text responses or function calls for analysis
+            client.onTextData = (text) => {
+                try {
+                    const data = JSON.parse(text);
+                    if (data && data.analysis_from_function) {
+                        console.log('Analysis data received via function!', data.analysis_from_function);
+                        setAnalysisData(data.analysis_from_function);
+                        if (onAnalysisReadyRef.current) {
+                            onAnalysisReadyRef.current(data.analysis_from_function);
+                        }
+                        return;
+                    }
+                } catch (e) {
+                    // Not a function call payload, maybe text
+                    textBufferRef.current += text;
+                    tryParseAnalysis(textBufferRef.current);
+                }
+            };
+
             client.onTurnComplete = () => {
                 if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
                 isAISpeakingRef.current = false;
                 setIsAISpeaking(false);
                 setPersonaState('idle');
                 isGreetingRef.current = false;
+                // Only count as a real exchange if user actually spoke
+                if (userSpokeRef.current) {
+                    userSpokeRef.current = false;
+                    setTurnCount(prev => {
+                        const newCount = prev + 1;
+                        turnCountRef.current = newCount;
+                        return newCount;
+                    });
+                }
             };
 
             client.onOpen = async () => {
                 setIsLive(true);
                 try {
                     await audioStreamerRef.current.startRecording((base64Input) => {
-                        if (!isMicMutedRef.current && !isAISpeakingRef.current) {
+                        if (!isMicMutedRef.current) {
                             client.sendAudioChunk(base64Input);
+                            // Mark that user is actively speaking (real Q&A)
+                            if (!isAISpeakingRef.current) {
+                                userSpokeRef.current = true;
+                            }
                         }
                     });
 
                     if (!greetingSentRef.current) {
                         greetingSentRef.current = true;
                         isGreetingRef.current = true;
+                        // Small delay to ensure setup message is processed first
                         setTimeout(() => {
                             client.sendTextMessage("Boshlang");
-                        }, 500);
+                        }, 300);
+                    } else {
+                        // Reconnection scenario
+                        setTimeout(() => {
+                            if (isEndingRef.current) {
+                                // We were just waiting for the analysis JSON when the connection dropped!
+                                const msg = "TIZIM BUYRUG'I: Suhbat yakunlangan edi, ammo tarmoq uzilishi sababli sizning oxirgi xulosangiz yetib kelmadi. ZUDLIK BILAN, hech qanday ovozli gaplarsiz, 'submit_analysis' funksiyasini chaqiring yoka barcha JSON ma'lumotlarni [ANALYSIS_DATA] va [/ANALYSIS_DATA] teglari orasida matn sifatida yuboring. Gapirmang!";
+                                client.sendTextMessage(msg);
+                            } else {
+                                const turns = turnCountRef.current;
+                                let msg = "Texnik sabablarga ko'ra aloqa uzilib qoldi. Biz kasb tanlash bo'yicha suhbatlashayotgan edik.";
+                                if (turns >= 5) {
+                                    msg += ` Diqqat: Biz hozirgacha suhbatda ${turns} ta savol-javob qildik. Suhbat deyarli yakuniga yetgan. ZINXOR boshidan boshlamang! To'g'ridan-to'g'ri foydalanuvchiga 'Aloqa uzilib qoldi, uzr. Xo'sh, oxirgi gaplashgan mavzumizdan kelib chiqib, sizga oxirgi savolimni bersam...' deb yakunlovchi maxsus savolingizni bering va tezroq [ANALYSIS_DATA] orqali tahlilni yakunlashga harakat qiling.`;
+                                } else {
+                                    msg += ` Iltimos, suhbatni qolgan joyidan davom ettiring va foydalanuvchiga 'Aloqa biroz uzilib qoldi, uzr. Xo'sh, oxirgi marta nima haqida gaplashayotgan edik?' deb murojaat qiling. Boshidan salomlashmang.`;
+                                }
+                                client.sendTextMessage(msg);
+                            }
+                        }, 300);
                     }
                 } catch (error) {
                     console.error("Mic recording error", error);
@@ -132,28 +224,44 @@ export function useGeminiLive() {
                 audioStreamerRef.current?.stop();
                 stopVision();
 
-                const reason = event?.reason?.toLowerCase() || '';
-                const isRateLimit = event?.code === 1008 ||
+                const code = event?.code;
+                const reason = (event?.reason || '').toLowerCase();
+
+                const isRateLimit = code === 1008 ||
                     reason.includes('rate') || reason.includes('limit') ||
                     reason.includes('quota') || reason.includes('resource_exhausted');
 
-                if (isRateLimit && currentApiKeyRef.current === 1 && pendingReconnectRef.current) {
+                // 1011 = Gemini deadline/timeout — auto-reconnect seamlessly
+                const isTimeout = code === 1011 ||
+                    reason.includes('deadline') || reason.includes('expired');
+
+                if (isRateLimit && pendingReconnectRef.current) {
                     const { systemInstruction, voiceName } = pendingReconnectRef.current;
-                    const secondKey = import.meta.env.VITE_GEMINI_API_KEY2;
-                    if (secondKey) {
-                        setTimeout(() => connect(secondKey, systemInstruction, voiceName, true), 1000);
-                    }
+                    console.log(`Rate limit hit on key index ${currentKeyIndexRef.current} — switching to next API key`);
+                    // isRetry = true will increment the key index in connect()
+                    setTimeout(() => connect(null, systemInstruction, voiceName, true), 1000);
+                } else if (isTimeout && pendingReconnectRef.current) {
+                    // Session timeout — silently reconnect without resetting turnCount or switching key (unless it fails later)
+                    const { systemInstruction, voiceName } = pendingReconnectRef.current;
+                    console.log('Session timeout (1011) — auto-reconnecting silently...');
+                    // Mark greeting as already sent so AI continues, not restarts
+                    greetingSentRef.current = true;
+                    isConnectingRef.current = false;
+                    // Pass false to isRetry to keep the current key index
+                    setTimeout(() => connect(null, systemInstruction, voiceName, false), 1500);
                 }
             };
 
             client.connect(systemInstruction, voiceName);
             clientRef.current = client;
+            isConnectingRef.current = false;
 
         } catch (error) {
             console.error("Connection failed", error);
             setIsLive(false);
+            isConnectingRef.current = false;
         }
-    }, [isMicMuted]);
+    }, [isMicMuted, tryParseAnalysis]);
 
     const stopVision = useCallback(() => {
         setIsVisionEnabled(false);
@@ -223,7 +331,6 @@ export function useGeminiLive() {
         } catch (err) {
             console.error("Camera error", err);
             setPermissionError('camera');
-            alert("Kamera ruxsati kerak!");
         }
     }, [isLive, stopVision]);
 
@@ -231,10 +338,18 @@ export function useGeminiLive() {
         isVisionEnabled ? stopVision() : startVision();
     }, [isVisionEnabled, startVision, stopVision]);
 
+    const sendText = useCallback((text) => {
+        if (clientRef.current) {
+            clientRef.current.sendTextMessage(text);
+        }
+    }, []);
+
     return {
-        isLive, volume, connect, disconnect,
+        isLive, volume, connect, disconnect, sendText,
         videoRef, isVisionEnabled, toggleVision,
         isMicMuted, toggleMic,
-        permissionError, personaState, isAISpeaking
+        permissionError, personaState, isAISpeaking,
+        analysisData, turnCount,
+        setEndingState: (state) => { isEndingRef.current = state; }
     };
 }

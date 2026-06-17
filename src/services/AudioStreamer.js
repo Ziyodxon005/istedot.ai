@@ -1,6 +1,7 @@
 export class AudioStreamer {
     constructor() {
         this.audioContext = null;
+        this.playbackContext = null;
         this.mediaStream = null;
         this.workletNode = null;
         this.gainNode = null;
@@ -18,46 +19,45 @@ export class AudioStreamer {
     }
 
     async initialize() {
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-            sampleRate: this.inputSampleRate,
-        });
-
+        // Reuse the AudioContext pre-warmed during user gesture on splash screen
+        if (window.__prewarmedAudioContext && window.__prewarmedAudioContext.state !== 'closed') {
+            this.audioContext = window.__prewarmedAudioContext;
+            window.__prewarmedAudioContext = null; // consume it
+            console.log('AudioStreamer.initialize(): Reusing pre-warmed AudioContext, state:', this.audioContext.state);
+        } else {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: this.inputSampleRate,
+            });
+            console.log('AudioStreamer.initialize(): Created fresh AudioContext');
+        }
+        // Resume if suspended
+        if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+        }
         this.analyser = this.audioContext.createAnalyser();
         this.analyser.fftSize = 256;
 
-        await this.audioContext.audioWorklet.addModule(
-            URL.createObjectURL(
-                new Blob(
-                    [
-                        `
-            class PCMProcessor extends AudioWorkletProcessor {
-              constructor() {
-                super();
-                this.bufferSize = 2048;
-              }
-              process(inputs, outputs, parameters) {
-                const input = inputs[0];
-                if (input && input.length > 0) {
-                  const channelData = input[0];
-                  if (channelData) {
-                    this.port.postMessage(channelData);
-                  }
-                }
-                return true;
-              }
-            }
-            registerProcessor("pcm-processor", PCMProcessor);
-            `,
-                    ],
-                    { type: "application/javascript" }
-                )
-            )
-        );
+        // Reuse pre-warmed playback context, or create fresh
+        if (window.__prewarmedPlaybackContext && window.__prewarmedPlaybackContext.state !== 'closed') {
+            this.playbackContext = window.__prewarmedPlaybackContext;
+            window.__prewarmedPlaybackContext = null;
+            console.log('AudioStreamer.initialize(): Reusing pre-warmed PlaybackContext');
+        } else {
+            this.playbackContext = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: this.outputSampleRate,
+            });
+        }
+        if (this.playbackContext.state === 'suspended') {
+            await this.playbackContext.resume();
+        }
+        console.log('AudioStreamer.initialize(): AudioContext ready, state:', this.audioContext.state);
     }
 
     async startRecording(onDataAvailable) {
         console.log('AudioStreamer.startRecording(): Starting...');
         if (!this.audioContext) await this.initialize();
+        if (this.audioContext.state === 'suspended') await this.audioContext.resume();
+        if (this.playbackContext && this.playbackContext.state === 'suspended') await this.playbackContext.resume();
 
         this.onDataCallback = onDataAvailable;
         this.isPaused = false;
@@ -76,27 +76,38 @@ export class AudioStreamer {
             console.log('AudioStreamer.startRecording(): Got mediaStream with', this.mediaStream.getTracks().length, 'tracks');
 
             if (!this.audioContext) {
-                // Context was closed while we were waiting for permission
                 this.mediaStream.getTracks().forEach(t => t.stop());
                 return;
             }
 
             const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-            this.workletNode = new AudioWorkletNode(this.audioContext, "pcm-processor");
 
-            this.workletNode.port.onmessage = (event) => {
-                if (this.isPaused) return; // Don't send data when paused
-                const float32Array = event.data;
+            // Use ScriptProcessor — works everywhere, no blob URL required
+            const bufferSize = 2048;
+            this.scriptProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+            this.scriptProcessor.onaudioprocess = (event) => {
+                if (this.isPaused || !this.onDataCallback) return;
+                const float32Array = event.inputBuffer.getChannelData(0);
                 const int16Array = this.convertFloat32ToInt16(float32Array);
-                if (this.onDataCallback) {
-                    this.onDataCallback(btoa(String.fromCharCode(...new Uint8Array(int16Array.buffer))));
-                }
+                this.onDataCallback(
+                    btoa(String.fromCharCode(...new Uint8Array(int16Array.buffer)))
+                );
             };
 
-            source.connect(this.workletNode);
-            this.workletNode.connect(this.analyser); // For visualizer inputs (user voice)
+            source.connect(this.scriptProcessor);
+            source.connect(this.analyser);
+
+            // Connect to a SILENT gain node — keeps the audio graph alive
+            // but prevents mic audio from reaching the speakers (no echo)
+            this.silentGain = this.audioContext.createGain();
+            this.silentGain.gain.value = 0;
+            this.scriptProcessor.connect(this.silentGain);
+            this.silentGain.connect(this.audioContext.destination);
+
+            console.log('AudioStreamer.startRecording(): Recording started successfully');
         } catch (error) {
-            console.error("Error accessing microphone:", error);
+            console.error('Error accessing microphone:', error);
             throw error;
         }
     }
@@ -144,18 +155,14 @@ export class AudioStreamer {
         });
         this.activeSources = [];
         this.audioQueue = [];
-        this.scheduledTime = this.audioContext ? this.audioContext.currentTime : 0;
+        this.scheduledTime = this.playbackContext ? this.playbackContext.currentTime : 0;
     }
 
     playAudioChunk(base64Audio) {
-        if (!this.audioContext) return;
+        const ctx = this.playbackContext || this.audioContext;
+        if (!ctx) return;
 
         const currentTime = Date.now();
-        // If more than 1 second gap, this is a new response - clear old audio
-        if (currentTime - this.lastAudioTime > 1000 && this.activeSources.length > 0) {
-            console.log('AudioStreamer: New response detected, clearing old audio');
-            this.clearAudioQueue();
-        }
         this.lastAudioTime = currentTime;
 
         const binaryString = atob(base64Audio);
@@ -171,10 +178,10 @@ export class AudioStreamer {
             float32Array[i] = int16Array[i] / 32768; // Convert Int16 to Float32
         }
 
-        const buffer = this.audioContext.createBuffer(1, float32Array.length, this.outputSampleRate);
+        const buffer = ctx.createBuffer(1, float32Array.length, this.outputSampleRate);
         buffer.copyToChannel(float32Array, 0);
 
-        const source = this.audioContext.createBufferSource();
+        const source = ctx.createBufferSource();
         source.buffer = buffer;
 
         // Track this source
@@ -184,12 +191,11 @@ export class AudioStreamer {
             if (idx > -1) this.activeSources.splice(idx, 1);
         };
 
-        // Connect to analyser for "AI Voice" visualization
-        source.connect(this.analyser);
-        this.analyser.connect(this.audioContext.destination);
+        // Play through separate output context — completely isolated from mic
+        source.connect(ctx.destination);
 
         // Simple scheduling to play sequentially
-        const audioCurrentTime = this.audioContext.currentTime;
+        const audioCurrentTime = ctx.currentTime;
         if (this.scheduledTime < audioCurrentTime) {
             this.scheduledTime = audioCurrentTime;
         }
@@ -212,17 +218,38 @@ export class AudioStreamer {
             this.mediaStream = null;
         }
 
-        // Disconnect worklet
+        // Disconnect script processor
+        if (this.scriptProcessor) {
+            this.scriptProcessor.disconnect();
+            this.scriptProcessor.onaudioprocess = null;
+            this.scriptProcessor = null;
+        }
+
+        // Clean up silent gain node
+        if (this.silentGain) {
+            this.silentGain.disconnect();
+            this.silentGain = null;
+        }
+
+        // Also clean up legacy worklet node if any
         if (this.workletNode) {
             this.workletNode.disconnect();
             this.workletNode = null;
         }
 
-        // Close audio context
+
+        // Close input audio context
         if (this.audioContext) {
             this.audioContext.close();
             this.audioContext = null;
         }
+
+        // Close output/playback audio context
+        if (this.playbackContext) {
+            this.playbackContext.close();
+            this.playbackContext = null;
+        }
+
 
         // Clear active sources
         this.activeSources.forEach(source => {

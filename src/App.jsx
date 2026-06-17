@@ -1,38 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import SplashScreen from './components/SplashScreen';
 import ConversationPage from './components/ConversationPage';
+import AnalysisPage from './components/AnalysisPage';
+import CertificatePage from './components/CertificatePage';
 import './App.css';
 
-// Avtomatik general personajini ishlatamiz - persona tanlash sahifasi yo'q
 const AUTO_PERSONA_ID = 'general';
 
 function App() {
     const [currentPage, setCurrentPage] = useState('splash');
+    const [analysisData, setAnalysisData] = useState(null);
 
     const handleSplashComplete = () => {
-        // Splash tugagach to'g'ridan-to'g'ri conversation sahifasiga o'tamiz
         setCurrentPage('conversation');
     };
 
+    const handleAnalysisReady = useCallback((data) => {
+        setAnalysisData(data);
+        setCurrentPage('analyzing');
+    }, []);
+
+    const handleAnalysisComplete = () => {
+        setCurrentPage('certificate');
+    };
+
+    const handleRestart = () => {
+        setAnalysisData(null);
+        setCurrentPage('splash');
+    };
+
     const handleBack = () => {
-        // Orqaga bosganda splash sahifasiga qaytamiz (yoki shu sahifada qolamiz)
         setCurrentPage('splash');
     };
 
     return (
         <div className="app">
             <AnimatePresence mode="wait">
-                {currentPage === 'splash' ? (
+                {currentPage === 'splash' && (
                     <SplashScreen
                         key="splash"
                         onComplete={handleSplashComplete}
                     />
-                ) : (
+                )}
+                {currentPage === 'conversation' && (
                     <ConversationPage
                         key="conversation"
                         personaId={AUTO_PERSONA_ID}
                         onBack={handleBack}
+                        onAnalysisReady={handleAnalysisReady}
+                    />
+                )}
+                {currentPage === 'analyzing' && (
+                    <AnalysisPage
+                        key="analyzing"
+                        onComplete={handleAnalysisComplete}
+                    />
+                )}
+                {currentPage === 'certificate' && (
+                    <CertificatePage
+                        key="certificate"
+                        analysisData={analysisData}
+                        onRestart={handleRestart}
                     />
                 )}
             </AnimatePresence>
