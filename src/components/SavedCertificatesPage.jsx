@@ -89,7 +89,7 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
                                 <div className="saved-cert-meta">
                                     <span className="saved-cert-date">📅 {cert.date} · {cert.time}</span>
                                     {cert.topCareer && (
-                                        <span className="saved-cert-career">💼 {cert.topCareer}</span>
+                                        <span className="saved-cert-career">💼 ISTEDOT - AI</span>
                                     )}
                                 </div>
                                 <p className="saved-cert-summary">
