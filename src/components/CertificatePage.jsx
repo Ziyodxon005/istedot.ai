@@ -628,7 +628,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                 {/* ── FOOTER ──────────────────────────────────────── */}
                 <div className="cert-doc-footer">
                     <p>ISTEDOD AI — Sun'iy Intellekt Asosida Kasbiy Yo'nalish Tizimi</p>
-                    <p>Ushbu sertifikat sun'iy intellekt tomonidan savol-javob tahlili orqali avtomatik ishlab chiqilgan · istedod-ai</p>
+                    <p>Ushbu sertifikat sun'iy intellekt tomonidan savol-javob tahlili orqali avtomatik ishlab chiqilgan. Ushbu qo'llanmani faqat maslahat sifatida qabul qiling! · istedod-ai</p>
                 </div>
             </div>
         </motion.div>
