@@ -157,7 +157,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
         if (!el) return;
         const btns = document.querySelectorAll('.cert-action-btn');
         btns.forEach(b => b.style.display = 'none');
-        
+
         const originalMaxWidth = el.style.maxWidth;
         const originalWidth = el.style.width;
         const originalMargin = el.style.margin;
@@ -166,7 +166,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
         try {
             const A4_WIDTH_MM = 210;
             const A4_HEIGHT_MM = 297;
-            const RENDER_PX_WIDTH = 1000; 
+            const RENDER_PX_WIDTH = 1000;
             el.style.maxWidth = 'none';
             el.style.width = RENDER_PX_WIDTH + 'px';
             el.style.margin = '0';
@@ -228,12 +228,12 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
             console.error("PDF generation failed:", e);
             alert("PDF yuklanmadi, sababi xato bor: " + e.message + ". Iltimos shu xatoni yuboring.");
         }
-        finally { 
+        finally {
             el.style.maxWidth = originalMaxWidth;
             el.style.width = originalWidth;
             el.style.margin = originalMargin;
             el.style.transform = originalTransform;
-            btns.forEach(b => b.style.display = ''); 
+            btns.forEach(b => b.style.display = '');
         }
     };
 
@@ -457,7 +457,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                             const isObj = typeof c === 'object';
                             const name = isObj ? c.name : c;
                             const desc = isObj ? c.description : '';
-                            
+
                             // Deterministic match percentage
                             let match = 90 - (i * 3);
                             if (isObj && typeof c.match === 'string') {
@@ -628,7 +628,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                 {/* ── FOOTER ──────────────────────────────────────── */}
                 <div className="cert-doc-footer">
                     <p>ISTEDOD AI — Sun'iy Intellekt Asosida Kasbiy Yo'nalish Tizimi</p>
-                    <p>Ushbu sertifikat sun'iy intellekt tomonidan savol-javob tahlili orqali avtomatik yaratilgan · istedod.ai</p>
+                    <p>Ushbu sertifikat sun'iy intellekt tomonidan savol-javob tahlili orqali avtomatik ishlab chiqilgan · istedod-ai</p>
                 </div>
             </div>
         </motion.div>
