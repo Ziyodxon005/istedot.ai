@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SphereVisualizer from './SphereVisualizer';
+import { getSavedCertificates } from '../utils/certificateStore';
 
-const SplashScreen = ({ onComplete }) => {
+const SplashScreen = ({ onComplete, onViewSaved }) => {
     const [started, setStarted] = useState(false);
+    const [savedCount, setSavedCount] = useState(0);
+
+    useEffect(() => {
+        const certs = getSavedCertificates();
+        setSavedCount(certs.length);
+    }, []);
 
     const handleStart = () => {
         if (started) return;
@@ -11,12 +18,10 @@ const SplashScreen = ({ onComplete }) => {
 
         // Pre-warm BOTH AudioContexts synchronously within user gesture
         try {
-            // Input context for microphone (16kHz)
             const inputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             window.__prewarmedAudioContext = inputCtx;
             inputCtx.resume().catch(() => { });
 
-            // Output context for AI voice playback (24kHz)
             const outputCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
             window.__prewarmedPlaybackContext = outputCtx;
             outputCtx.resume().catch(() => { });
@@ -24,7 +29,6 @@ const SplashScreen = ({ onComplete }) => {
             console.warn('AudioContext prewarm failed:', e);
         }
 
-        // Short delay for exit animation, then navigate
         setTimeout(() => onComplete(), 500);
     };
 
@@ -94,12 +98,14 @@ const SplashScreen = ({ onComplete }) => {
                     </div>
                 </motion.div>
 
-                {/* START BUTTON — user gesture = AudioContext unlock */}
+                {/* Buttons */}
                 <motion.div
+                    className="splash-buttons-row"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 1.8, duration: 0.7 }}
                 >
+                    {/* START BUTTON */}
                     <motion.button
                         className="splash-start-btn"
                         onClick={handleStart}
@@ -130,6 +136,25 @@ const SplashScreen = ({ onComplete }) => {
                             )}
                         </AnimatePresence>
                     </motion.button>
+
+                    {/* SAVED CERTS BUTTON — only if certs exist */}
+                    <AnimatePresence>
+                        {savedCount > 0 && (
+                            <motion.button
+                                className="splash-saved-btn"
+                                onClick={onViewSaved}
+                                initial={{ opacity: 0, scale: 0.85 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.85 }}
+                                whileHover={{ scale: 1.06 }}
+                                whileTap={{ scale: 0.96 }}
+                                title="Saqlangan sertifikatlarni ko'rish"
+                            >
+                                📋 Sertifikatlar
+                                <span className="splash-saved-badge">{savedCount}</span>
+                            </motion.button>
+                        )}
+                    </AnimatePresence>
                 </motion.div>
 
                 {/* FOOTER & DISCLAIMER */}

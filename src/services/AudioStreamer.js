@@ -197,7 +197,8 @@ export class AudioStreamer {
         // Simple scheduling to play sequentially
         const audioCurrentTime = ctx.currentTime;
         if (this.scheduledTime < audioCurrentTime) {
-            this.scheduledTime = audioCurrentTime;
+            // Jitter buffer: add a 60ms delay to absorb network jitter and prevent choppy/scratched audio
+            this.scheduledTime = audioCurrentTime + 0.06;
         }
 
         source.start(this.scheduledTime);

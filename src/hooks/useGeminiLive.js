@@ -122,6 +122,7 @@ export function useGeminiLive() {
             const client = new GeminiLiveClient(activeApiKey);
 
             client.onAudioData = (base64Audio) => {
+                if (isEndingRef.current) return; // Ignore any incoming audio once the conversation is ending
                 audioStreamerRef.current?.playAudioChunk(base64Audio);
                 setIsAISpeaking(true);
                 setPersonaState(isGreetingRef.current ? 'greeting' : 'speaking');
@@ -133,7 +134,7 @@ export function useGeminiLive() {
                     setIsAISpeaking(false);
                     setPersonaState('idle');
                     isGreetingRef.current = false;
-                }, 800);
+                }, 1200);
             };
 
             // Capture text responses or function calls for analysis
@@ -169,6 +170,19 @@ export function useGeminiLive() {
                         turnCountRef.current = newCount;
                         return newCount;
                     });
+                }
+            };
+
+            // Gemini server signals that AI was interrupted by user speech
+            client.onInterrupted = () => {
+                console.log('⚡ AI interrupted by user — clearing audio queue');
+                audioStreamerRef.current?.clearAudioQueue();
+                isAISpeakingRef.current = false;
+                setIsAISpeaking(false);
+                setPersonaState('idle');
+                if (speakingTimeoutRef.current) {
+                    clearTimeout(speakingTimeoutRef.current);
+                    speakingTimeoutRef.current = null;
                 }
             };
 
@@ -224,6 +238,12 @@ export function useGeminiLive() {
                 audioStreamerRef.current?.stop();
                 stopVision();
 
+                // If intentionally ending (disconnect() called manually) OR we are waiting for analysis, do NOT reconnect
+                if (!pendingReconnectRef.current || isEndingRef.current) {
+                    console.log('Intentional disconnect or waiting for analysis — no reconnect.');
+                    return;
+                }
+
                 const code = event?.code;
                 const reason = (event?.reason || '').toLowerCase();
 
@@ -231,23 +251,27 @@ export function useGeminiLive() {
                     reason.includes('rate') || reason.includes('limit') ||
                     reason.includes('quota') || reason.includes('resource_exhausted');
 
-                // 1011 = Gemini deadline/timeout — auto-reconnect seamlessly
+                // 1011 = Gemini deadline/timeout
                 const isTimeout = code === 1011 ||
                     reason.includes('deadline') || reason.includes('expired');
 
-                if (isRateLimit && pendingReconnectRef.current) {
+                // 1000 = normal close (intentional), 1001 = going away (page nav)
+                const isIntentional = code === 1000 || code === 1001;
+
+                if (isRateLimit) {
                     const { systemInstruction, voiceName } = pendingReconnectRef.current;
                     console.log(`Rate limit hit on key index ${currentKeyIndexRef.current} — switching to next API key`);
-                    // isRetry = true will increment the key index in connect()
                     setTimeout(() => connect(null, systemInstruction, voiceName, true), 1000);
-                } else if (isTimeout && pendingReconnectRef.current) {
-                    // Session timeout — silently reconnect without resetting turnCount or switching key (unless it fails later)
+                } else if (!isIntentional) {
+                    // Covers: 1011 timeout, 1006 abnormal close, network errors, any unexpected close
                     const { systemInstruction, voiceName } = pendingReconnectRef.current;
-                    console.log('Session timeout (1011) — auto-reconnecting silently...');
-                    // Mark greeting as already sent so AI continues, not restarts
-                    greetingSentRef.current = true;
+                    if (isTimeout) {
+                        console.log('Session timeout (1011) — auto-reconnecting silently...');
+                    } else {
+                        console.log(`Unexpected close (code ${code}) — auto-reconnecting...`);
+                    }
+                    greetingSentRef.current = true; // Continue, don't restart greeting
                     isConnectingRef.current = false;
-                    // Pass false to isRetry to keep the current key index
                     setTimeout(() => connect(null, systemInstruction, voiceName, false), 1500);
                 }
             };
@@ -274,6 +298,9 @@ export function useGeminiLive() {
     }, []);
 
     const disconnect = useCallback(() => {
+        // Signal onClose NOT to reconnect by clearing pendingReconnect FIRST
+        pendingReconnectRef.current = null;
+
         audioStreamerRef.current?.stop();
         stopVision();
 
@@ -293,6 +320,7 @@ export function useGeminiLive() {
         setPersonaState('idle');
         setIsAISpeaking(false);
         isGreetingRef.current = false;
+        isConnectingRef.current = false;
     }, [stopVision]);
 
     const toggleMic = useCallback(() => {
@@ -344,8 +372,20 @@ export function useGeminiLive() {
         }
     }, []);
 
+    // Immediately stop all AI audio playback (for finish button)
+    const stopAudio = useCallback(() => {
+        audioStreamerRef.current?.clearAudioQueue();
+        isAISpeakingRef.current = false;
+        setIsAISpeaking(false);
+        setPersonaState('idle');
+        if (speakingTimeoutRef.current) {
+            clearTimeout(speakingTimeoutRef.current);
+            speakingTimeoutRef.current = null;
+        }
+    }, []);
+
     return {
-        isLive, volume, connect, disconnect, sendText,
+        isLive, volume, connect, disconnect, sendText, stopAudio,
         videoRef, isVisionEnabled, toggleVision,
         isMicMuted, toggleMic,
         permissionError, personaState, isAISpeaking,

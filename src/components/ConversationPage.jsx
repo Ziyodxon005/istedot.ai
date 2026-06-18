@@ -26,6 +26,7 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
         turnCount,
         isAISpeaking,
         setEndingState,
+        stopAudio,
     } = useGeminiLive();
 
 
@@ -65,6 +66,9 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
         if (isEnding) return;
         setIsEnding(true);
         setEndingState(true);
+
+        // 0. ZUDDA ovozni o'chir — AI gapirayotgan bo'lsa ham
+        if (stopAudio) stopAudio();
 
         // 1. Immediately mute mic so AI doesn't hear background noise
         if (!isMicMuted) toggleMic();

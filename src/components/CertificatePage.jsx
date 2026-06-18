@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { saveCertificate } from '../utils/certificateStore';
 
 const HOLLAND = {
     R: { name: 'Realistik', color: '#fb923c', bg: '#fb923c18' },
@@ -108,13 +109,22 @@ function getSubjectsForDirection(directionName) {
     return ['Ingliz tili', "O'zbek tili va adabiyot"];
 }
 
-const CertificatePage = ({ analysisData, onRestart }) => {
+const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, customBackBtn = null }) => {
     const certRef = useRef(null);
+    const savedRef = useRef(false);
 
     const now = new Date();
     const dateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
 
     if (!analysisData) return null;
+
+    // Auto-save to localStorage once on first render
+    useEffect(() => {
+        if (!skipAutoSave && !savedRef.current && analysisData) {
+            savedRef.current = true;
+            saveCertificate(analysisData);
+        }
+    }, [analysisData, skipAutoSave]);
 
     // 🔍 DEBUG: Uncomment this to inspect what AI actually sent
     console.table({
@@ -147,34 +157,84 @@ const CertificatePage = ({ analysisData, onRestart }) => {
         if (!el) return;
         const btns = document.querySelectorAll('.cert-action-btn');
         btns.forEach(b => b.style.display = 'none');
+        
+        const originalMaxWidth = el.style.maxWidth;
+        const originalWidth = el.style.width;
+        const originalMargin = el.style.margin;
+        const originalTransform = el.style.transform;
+
         try {
+            const A4_WIDTH_MM = 210;
+            const A4_HEIGHT_MM = 297;
+            const RENDER_PX_WIDTH = 1000; 
+            el.style.maxWidth = 'none';
+            el.style.width = RENDER_PX_WIDTH + 'px';
+            el.style.margin = '0';
+            el.style.transform = 'none';
+
             const canvas = await html2canvas(el, {
-                scale: 2,
+                scale: 2, // HiDPI quality
                 useCORS: true,
                 backgroundColor: '#050b18',
                 scrollX: 0,
-                scrollY: 0
+                scrollY: 0,
+                windowWidth: RENDER_PX_WIDTH,
+                logging: false,
             });
-            const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-            // Calculate dynamic PDF height to match the image ratio perfectly
-            // We'll use a fixed width (like A3 width = 297mm) and dynamic height
-            const pdfWidth = 297;
-            const pdfHeight = Math.ceil((canvas.height * pdfWidth) / canvas.width);
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+
+            // ─── Calculate how many A4 pages are needed ───────────────────────
+            // pdfImgWidth = full A4 width in mm
+            // pdfImgHeight = the proportional height of the canvas in mm
+            const pdfImgWidth = A4_WIDTH_MM;
+            const pdfImgHeight = (imgHeight / imgWidth) * pdfImgWidth;
+
+            const totalPages = Math.ceil(pdfImgHeight / A4_HEIGHT_MM);
 
             const pdf = new jsPDF({
-                orientation: pdfHeight > pdfWidth ? 'portrait' : 'landscape',
+                orientation: 'portrait',
                 unit: 'mm',
-                format: [pdfWidth, pdfHeight]
+                format: 'a4',
             });
 
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+            // ─── Slice canvas into A4-height chunks and add each as a page ────
+            for (let page = 0; page < totalPages; page++) {
+                if (page > 0) pdf.addPage();
+
+                // How many canvas pixels correspond to one A4 page height?
+                const pageHeightPx = Math.round((A4_HEIGHT_MM / pdfImgWidth) * imgWidth);
+                const srcY = page * pageHeightPx;
+                const srcH = Math.min(pageHeightPx, imgHeight - srcY);
+
+                // Create a slice canvas for this page
+                const pageCanvas = document.createElement('canvas');
+                pageCanvas.width = imgWidth;
+                pageCanvas.height = pageHeightPx; // Always full page height (blank at end if needed)
+                const ctx = pageCanvas.getContext('2d');
+                ctx.fillStyle = '#050b18';
+                ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+                ctx.drawImage(canvas, 0, srcY, imgWidth, srcH, 0, 0, imgWidth, srcH);
+
+                const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92);
+                // Rendered page height in mm (for last page may be less)
+                const renderedPageHeightMM = (srcH / imgWidth) * pdfImgWidth;
+                pdf.addImage(pageImgData, 'JPEG', 0, 0, A4_WIDTH_MM, renderedPageHeightMM);
+            }
+
             pdf.save(`ISTEDOD-AI-Sertifikat-${dateStr.replace(/\//g, '-')}.pdf`);
         } catch (e) {
             console.error("PDF generation failed:", e);
             alert("PDF yuklanmadi, sababi xato bor: " + e.message + ". Iltimos shu xatoni yuboring.");
         }
-        finally { btns.forEach(b => b.style.display = ''); }
+        finally { 
+            el.style.maxWidth = originalMaxWidth;
+            el.style.width = originalWidth;
+            el.style.margin = originalMargin;
+            el.style.transform = originalTransform;
+            btns.forEach(b => b.style.display = ''); 
+        }
     };
 
     return (
@@ -186,10 +246,12 @@ const CertificatePage = ({ analysisData, onRestart }) => {
         >
             {/* Floating Action Buttons */}
             <div className="cert-floating-actions">
-                <motion.button className="cert-action-btn cert-action-restart" onClick={onRestart}
-                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    ↩ Qayta boshlash
-                </motion.button>
+                {customBackBtn ? customBackBtn : (
+                    <motion.button className="cert-action-btn cert-action-restart" onClick={onRestart}
+                        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                        ↩ Qayta boshlash
+                    </motion.button>
+                )}
                 <motion.button className="cert-action-btn cert-action-download" onClick={handleDownload}
                     whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                     ⬇ PDF yuklab olish
@@ -394,8 +456,20 @@ const CertificatePage = ({ analysisData, onRestart }) => {
                         {recommendedCareers.map((c, i) => {
                             const isObj = typeof c === 'object';
                             const name = isObj ? c.name : c;
-                            const match = parseInt(isObj ? c.match : 90) || 90;
                             const desc = isObj ? c.description : '';
+                            
+                            // Deterministic match percentage
+                            let match = 90 - (i * 3);
+                            if (isObj && typeof c.match === 'string') {
+                                const text = c.match.toLowerCase();
+                                if (text.includes('juda yuqori')) match = 96 - i * 2;
+                                else if (text.includes('yuqori')) match = 88 - i * 2;
+                                else if (text.includes("o'rta") || text.includes('orta')) match = 75 - i * 2;
+                                else match = parseInt(c.match) || match;
+                            } else if (isObj && typeof c.match === 'number') {
+                                match = c.match;
+                            }
+
                             return (
                                 <div key={i} className={`cert-career-card ${i === 0 ? 'top' : ''}`}>
                                     <div className="cert-career-card-header">
