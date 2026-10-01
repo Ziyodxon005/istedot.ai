@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { GeminiLiveClient } from '../services/GeminiLiveClient';
 import { AudioStreamer } from '../services/AudioStreamer';
-import { generateAnalysisWithGeminiThinking } from '../services/analysisService';
+import { generateAnalysisWithGeminiThinking, buildFallbackAnalysis } from '../services/analysisService';
 
 export function useGeminiLive() {
     const [isLive, setIsLive] = useState(false);
@@ -462,7 +462,7 @@ export function useGeminiLive() {
             clientRef.current.sendTextMessage(finishPrompt);
         }
 
-        // 2. Qat'iy zaxira taymeri: agar 12 soniyada live tahlil kelmasa, darhol Gemini 3.8 Extended Thinking REST orqali generatsiya qiladi!
+        // 2. Qat'iy tezkor zaxira taymeri: agar 4 soniyada live tahlil kelmasa, darhol Gemini 3.8 Extended Thinking REST orqali generatsiya qiladi!
         if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
         fallbackTimerRef.current = setTimeout(async () => {
             if (analysisSentRef.current) return;
@@ -471,11 +471,16 @@ export function useGeminiLive() {
                 const generated = await generateAnalysisWithGeminiThinking(conversationHistoryRef.current);
                 if (generated) {
                     dispatchAnalysis(generated);
+                } else {
+                    const fallback = buildFallbackAnalysis(conversationHistoryRef.current.map(m => m.text).join(' '));
+                    dispatchAnalysis(fallback);
                 }
             } catch (err) {
                 console.error("Analysis generation error:", err);
+                const fallback = buildFallbackAnalysis(conversationHistoryRef.current.map(m => m.text).join(' '));
+                dispatchAnalysis(fallback);
             }
-        }, 12000);
+        }, 4000);
     }, [isLive, stopAudio, dispatchAnalysis]);
 
     return {

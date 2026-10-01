@@ -5,22 +5,51 @@ import ConversationPage from './components/ConversationPage';
 import AnalysisPage from './components/AnalysisPage';
 import CertificatePage from './components/CertificatePage';
 import SavedCertificatesPage from './components/SavedCertificatesPage';
+import { saveCertificate } from './utils/certificateStore';
 import './App.css';
 
 const AUTO_PERSONA_ID = 'general';
 
 function App() {
-    const [currentPage, setCurrentPage] = useState('splash');
-    const [analysisData, setAnalysisData] = useState(null);
+    // Sahifa yangilanganda (refresh) oxirgi sertifikatni yo'qotmaslik uchun sessionStorage'dan tiklaymiz
+    const [currentPage, setCurrentPage] = useState(() => {
+        try {
+            const activeRaw = sessionStorage.getItem('current_active_cert');
+            if (activeRaw) {
+                const parsed = JSON.parse(activeRaw);
+                if (parsed && (parsed.summary || parsed.recommendedCareers)) {
+                    return 'certificate';
+                }
+            }
+        } catch (e) { }
+        return 'splash';
+    });
 
-    const handleSplashComplete = () => {
+    const [analysisData, setAnalysisData] = useState(() => {
+        try {
+            const activeRaw = sessionStorage.getItem('current_active_cert');
+            if (activeRaw) {
+                return JSON.parse(activeRaw);
+            }
+        } catch (e) { }
+        return null;
+    });
+
+    const handleSplashComplete = useCallback(() => {
         setCurrentPage('conversation');
-    };
+    }, []);
 
     const handleAnalysisReady = useCallback((data) => {
+        if (!data) return;
         setAnalysisData(data);
+        // Zudlik bilan saqlash - foydalanuvchi sahifani yangilasa ham sertifikat yo'qolmaydi!
+        try {
+            sessionStorage.setItem('current_active_cert', JSON.stringify(data));
+            saveCertificate(data);
+        } catch (e) {
+            console.error('Certificate save error:', e);
+        }
         setCurrentPage((prev) => {
-            // Agar foydalanuvchi allaqachon sertifikatni ko'rayotgan bo'lsa, qayta analyzing ga o'tmasin!
             if (prev === 'certificate' || prev === 'viewing_saved_cert' || prev === 'analyzing') {
                 return prev;
             }
@@ -28,27 +57,36 @@ function App() {
         });
     }, []);
 
-    const handleAnalysisComplete = () => {
+    const handleAnalysisComplete = useCallback(() => {
         setCurrentPage('certificate');
-    };
+    }, []);
 
-    const handleRestart = () => {
+    const handleRestart = useCallback(() => {
+        try {
+            sessionStorage.removeItem('current_active_cert');
+        } catch (e) { }
         setAnalysisData(null);
         setCurrentPage('splash');
-    };
+    }, []);
 
-    const handleBack = () => {
+    const handleBack = useCallback(() => {
+        try {
+            sessionStorage.removeItem('current_active_cert');
+        } catch (e) { }
         setCurrentPage('splash');
-    };
+    }, []);
 
-    const handleViewSaved = () => {
+    const handleViewSaved = useCallback(() => {
         setCurrentPage('saved');
-    };
+    }, []);
 
-    const handleViewSavedCert = (certData) => {
+    const handleViewSavedCert = useCallback((certData) => {
         setAnalysisData(certData);
+        try {
+            sessionStorage.setItem('current_active_cert', JSON.stringify(certData));
+        } catch (e) { }
         setCurrentPage('viewing_saved_cert');
-    };
+    }, []);
 
     return (
         <div className="app">

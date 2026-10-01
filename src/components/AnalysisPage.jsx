@@ -17,7 +17,7 @@ const AnalysisPage = ({ onComplete }) => {
     const [progress, setProgress] = useState(0);
 
     useEffect(() => {
-        const duration = 4500;
+        const duration = 3000;
         const stepDuration = duration / steps.length;
 
         const stepInterval = setInterval(() => {
@@ -39,8 +39,8 @@ const AnalysisPage = ({ onComplete }) => {
         }, duration / 100);
 
         const finishTimer = setTimeout(() => {
-            onComplete();
-        }, duration + 600);
+            if (onComplete) onComplete();
+        }, duration + 350);
 
         return () => {
             clearInterval(stepInterval);

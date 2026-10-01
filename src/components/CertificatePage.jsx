@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { saveCertificate } from '../utils/certificateStore';
+import { saveCertificate, getSavedCertificates } from '../utils/certificateStore';
 import istedotLogo from '../assets/logo_istedot.png';
 import { Sparkles, GraduationCap, BookOpen, User, Briefcase, Award, ArrowLeft, Download, CheckCircle2 } from 'lucide-react';
 
@@ -133,34 +133,113 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
     const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
     const certNumber = `IST-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    if (!analysisData) return null;
+    // Agar prop sifatida tahlil berilmagan bo'lsa (masalan refresh paytida), sessionStorage yoki saqlanganlardan olamiz
+    const data = analysisData || (() => {
+        try {
+            const raw = sessionStorage.getItem('current_active_cert');
+            if (raw) return JSON.parse(raw);
+            const saved = getSavedCertificates();
+            if (saved && saved.length > 0) return saved[0].data || saved[0];
+        } catch (e) { }
+        return null;
+    })();
 
     // Auto-save to localStorage once on first render
     useEffect(() => {
-        if (!skipAutoSave && !savedRef.current && analysisData) {
+        if (!skipAutoSave && !savedRef.current && data) {
             savedRef.current = true;
             try {
-                saveCertificate(analysisData);
+                saveCertificate(data);
             } catch (err) {
                 console.error("Certificate save failed:", err);
             }
         }
-    }, [analysisData, skipAutoSave]);
+    }, [data, skipAutoSave]);
 
-    const {
-        summary = '',
-        interests = [],
-        character = {},
-        recommendedCareers = [],
-        universityDirections = [],
-        examSubjects = null,
-        subjectsAdvice = ''
-    } = analysisData;
+    if (!data) {
+        return (
+            <div className="cert-page-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', gap: '20px' }}>
+                <p style={{ color: '#fff', fontSize: '18px' }}>Sertifikat ma'lumotlari yuklanmoqda...</p>
+                <button className="cert-action-btn cert-action-restart" onClick={onRestart}>
+                    <ArrowLeft size={16} />
+                    <span>Bosh menyuga qaytish</span>
+                </button>
+            </div>
+        );
+    }
+
+    // 100% Xavfsiz ma'lumotlarni normallashtirish (hech qanday xatoda qotib qolmaydi)
+    const summary = typeof data.summary === 'string' ? data.summary : '';
+
+    const rawInterests = data.interests;
+    const interests = Array.isArray(rawInterests)
+        ? rawInterests.map(item => typeof item === 'object' ? (item.name || JSON.stringify(item)) : String(item || '')).filter(Boolean)
+        : (typeof rawInterests === 'string' ? rawInterests.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean) : []);
+
+    const rawChar = data.character || {};
+    const character = {
+        workStyle: typeof rawChar.workStyle === 'string' ? rawChar.workStyle : (Array.isArray(rawChar.workStyle) ? rawChar.workStyle.join(', ') : ''),
+        motivation: typeof rawChar.motivation === 'string' ? rawChar.motivation : '',
+        mainTraits: Array.isArray(rawChar.mainTraits) ? rawChar.mainTraits.map(String) : []
+    };
+
+    const rawCareers = data.recommendedCareers;
+    let recommendedCareers = [];
+    if (Array.isArray(rawCareers)) {
+        recommendedCareers = rawCareers.map((c, idx) => {
+            if (typeof c === 'object' && c !== null) {
+                return {
+                    name: typeof c.name === 'string' ? c.name : String(c.name || 'Kasbiy yo\'nalish'),
+                    match: typeof c.match === 'string' ? c.match : `${96 - idx * 4}%`,
+                    description: typeof c.description === 'string' ? c.description : ''
+                };
+            }
+            return {
+                name: String(c || 'Kasbiy yo\'nalish'),
+                match: `${96 - idx * 4}%`,
+                description: ''
+            };
+        });
+    }
+    if (recommendedCareers.length === 0) {
+        recommendedCareers = [
+            { name: "Axborot Texnologiyalari va Dasturlash", match: "96%", description: "Mantiqiy fikrlash va muammolarga yechim topish salohiyatingiz uchun." },
+            { name: "Tizimli Tahlilchi va Muhandis", match: "92%", description: "Mustaqil va tizimli fikrlash qobiliyatingiz." },
+            { name: "Zamonaviy Innovatsion Loyihalar Menejeri", match: "88%", description: "Yangi tendensiyalarni tez ilg'ab olish salohiyati." }
+        ];
+    }
+
+    const rawUnis = data.universityDirections;
+    const universityDirections = Array.isArray(rawUnis) ? rawUnis : [];
+
+    const primaryDirection = universityDirections?.[0]?.direction || recommendedCareers?.[0]?.name || '';
+
+    let mainExams = [];
+    if (Array.isArray(data.examSubjects?.main)) {
+        mainExams = data.examSubjects.main.map(String);
+    } else if (typeof data.examSubjects?.main === 'string') {
+        mainExams = data.examSubjects.main.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+    } else {
+        mainExams = getSubjectsForDirection(primaryDirection);
+    }
+
+    let mandatoryExams = [];
+    if (Array.isArray(data.examSubjects?.mandatory)) {
+        mandatoryExams = data.examSubjects.mandatory.map(String);
+    } else if (typeof data.examSubjects?.mandatory === 'string') {
+        mandatoryExams = data.examSubjects.mandatory.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+    } else {
+        mandatoryExams = MANDATORY_SUBJECTS;
+    }
+
+    const subjectsAdvice = typeof data.subjectsAdvice === 'string' ? data.subjectsAdvice : '';
 
     // Tez va tabiiy 3D tilt interaktivligi (har bir card uchun)
     const handleCardTilt = (e) => {
         const card = e.currentTarget;
+        if (!card) return;
         const rect = card.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         const centerX = rect.width / 2;
@@ -181,14 +260,10 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
 
     const handleCardReset = (e) => {
         const card = e.currentTarget;
+        if (!card) return;
         card.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.5s ease, border-color 0.5s ease';
         card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0) scale3d(1, 1, 1)';
     };
-
-    // Yo'nalish bo'yicha imtihon fanlarini aniqlash
-    const primaryDirection = universityDirections?.[0]?.direction || recommendedCareers?.[0]?.name || '';
-    const mainExams = examSubjects?.main || getSubjectsForDirection(primaryDirection);
-    const mandatoryExams = examSubjects?.mandatory || MANDATORY_SUBJECTS;
 
     // PDF yuklab olish - QAT'IY 1 SAHIFA (Single Page A4)
     const handleDownload = async () => {
@@ -542,7 +617,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                     <div className="cert-3d-footer-info">
                         <span className="cert-3d-ft-brand">ISTEDOD AI — Professional Kasbga Yo'naltirish Platformasi</span>
                         <p className="cert-3d-ft-note">
-                            Ushbu sertifikat savol-javob muloqoti asosida sun'iy intellekt tomonidan tahlil qilinib, 1 list formatida tuzildi.
+                            Ushbu sertifikat savol-javob muloqoti asosida sun'iy intellekt tomonidan tahlil qilinib,shu xulosalar asosida tuzildi.
                         </p>
                     </div>
 
@@ -558,7 +633,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                             </div>
                         </div>
                         <div className="cert-3d-sign-box">
-                            <span className="cert-3d-sign-line">Istedod AI Verified</span>
+                            <span className="cert-3d-sign-line">Istedod AI Tasdiqlangan</span>
                             <span className="cert-3d-sign-title">Avtomatlashtirilgan Tizim</span>
                         </div>
                     </div>
