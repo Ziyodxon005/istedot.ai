@@ -5,11 +5,10 @@ import SphereVisualizer from './SphereVisualizer';
 const steps = [
     'Javoblaringiz tahlil qilinmoqda...',
     'Qiziqishlaringiz aniqlanmoqda...',
-    'Holland kodi hisoblanmoqda...',
-    'Gardner intellekti baholanmoqda...',
     'Kasblar tavsiya etilmoqda...',
     'Universitetlar qidirilmoqda...',
     'Sertifikat tayyorlanmoqda...',
+    'Tahlil qilinmoqda...'
 ];
 
 const AnalysisPage = ({ onComplete }) => {
