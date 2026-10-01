@@ -12,6 +12,7 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
 
     const {
         isLive,
+        isReconnecting,
         volume,
         connect,
         disconnect,
@@ -27,11 +28,12 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
         isAISpeaking,
         setEndingState,
         stopAudio,
+        triggerAnalysis,
+        isReadyToFinish,
     } = useGeminiLive();
 
-
-    // Show finish button after AI has spoken at least 8 times (enough conversation)
-    const showFinishBtn = turnCount >= 8 && !isEnding;
+    // Show finish button ONLY after at least 7 meaningful questions (when psychological profile answers are sufficient and unhurried)
+    const showFinishBtn = (isReadyToFinish || turnCount >= 7) && !isEnding;
 
     const persona = PERSONAS[personaId] || PERSONAS['general'];
 
@@ -48,50 +50,25 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
         if (analysisData && onAnalysisReady && !analysisReceivedRef.current) {
             analysisReceivedRef.current = true;
 
-            // Clear any pending timeout so no alerts pop up
+            // Clear any pending timeout
             if (analysisReceivedRef._retryInterval) {
                 clearTimeout(analysisReceivedRef._retryInterval);
                 analysisReceivedRef._retryInterval = null;
             }
 
-            // Instantly transition to AnalysisPage which will handle the 15s wait
+            // Instantly transition to AnalysisPage
             disconnect();
             onAnalysisReady(analysisData);
         }
     }, [analysisData]); // eslint-disable-line
 
-
-    // Send a finish command to AI so it calls submit_analysis
+    // Send finish command and trigger reliable analysis
     const handleFinishConversation = () => {
         if (isEnding) return;
         setIsEnding(true);
         setEndingState(true);
-
-        // 0. ZUDDA ovozni o'chir — AI gapirayotgan bo'lsa ham
-        if (stopAudio) stopAudio();
-
-        // 1. Immediately mute mic so AI doesn't hear background noise
-        if (!isMicMuted) toggleMic();
-
-        // 2. Strong, clear command to AI (System prompt style to prevent verbal reply)
-        const finishPrompt = "TIZIM BUYRUG'I: Suhbat foydalanuvchi tomonidan yakunlandi. Hech qanday so'z bilan javob qaytarmang! Gapirmang! Faqat va faqat 'submit_analysis' funksiyasini barcha ma'lumotlar bilan HOZIROQ chaqiring.";
-        sendText(finishPrompt);
-
-        // 3. Faqat bir marta kutamiz, chunki AI tahlilni yozishiga uzoq vaqt ketishi mumkin
-        // Qayta-qayta yuborish uni chalg'itadi va boshidan boshlashiga sabab bo'ladi.
-        const fallbackTimer = setTimeout(() => {
-            if (!analysisReceivedRef.current) {
-                // Agar 60 soniyada ham kelmasa, internet sekin bo'lishi mumkin.
-                // Biz jarayonni to'xtatmaymiz, faqat foydalanuvchiga xabar beramiz
-                console.log("Analysis is taking a long time (60s+). Re-pinging gently.");
-                sendText("TIZIM BUYRUG'I: 'submit_analysis' funksiyasini zudlik bilan ishga tushiring! Hech qanday ovozli javob bermang!");
-            }
-        }, 60000); // 60 soniya kutish
-
-        // Agar tahlil kelib qolsa, taymerni to'xtatish uchun saqlab qo'yamiz
-        analysisReceivedRef._retryInterval = fallbackTimer;
+        triggerAnalysis();
     };
-
 
     return (
         <motion.div
@@ -99,22 +76,25 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
         >
             <Particles />
 
             {/* Header */}
             <header className="conversation-header">
                 <div className="conv-header-left">
-                    <div className={`status-badge ${isLive ? 'live' : 'offline'}`}>
+                    <div className={`status-badge ${isReconnecting ? 'reconnecting' : isLive ? 'live' : 'offline'}`}>
                         <span className="status-dot"></span>
-                        <span className="status-text">{isLive ? 'JONLI' : 'ULANMOQDA'}</span>
+                        <span className="status-text">
+                            {isReconnecting ? 'QAYTA ULANMOQDA' : isLive ? 'JONLI' : 'ULANMOQDA'}
+                        </span>
                     </div>
                 </div>
 
                 <div className="conversation-title">
                     <span className="conv-brand">ISTEDOD<span style={{ color: '#4db8ff' }}> AI</span></span>
                     <p>Kasbiy Yo'nalish Suhbati</p>
-                    {/* Turn progress indicator */}
+                    {/* Turn progress indicator (8 stages) */}
                     {isLive && (
                         <div className="conv-turn-progress">
                             {Array.from({ length: 8 }, (_, i) => (
@@ -172,21 +152,23 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
                     {isLive && !isMicMuted && <span className="mic-pulse" />}
                 </motion.button>
 
-                {/* Finish conversation button — only after enough conversation */}
+                {/* Finish conversation button — only when answers are sufficient */}
                 <AnimatePresence>
                     {showFinishBtn && (
                         <motion.button
                             onClick={handleFinishConversation}
-                            className="btn-finish-conv"
-                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="btn-finish-conv ready-3d-glow"
+                            initial={{ opacity: 0, y: 14, scale: 0.9 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-                            whileHover={{ scale: 1.04 }}
-                            whileTap={{ scale: 0.96 }}
+                            exit={{ opacity: 0, scale: 0.85 }}
+                            transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            title="Tahlil tayyor: Rasmiy sertifikatni olish"
                         >
-                            <Sparkles size={18} />
-                            <span>Suhbatni yakunlash</span>
+                            <span className="btn-finish-sparkle">✦</span>
+                            <span>Sertifikatni olish</span>
+                            <Sparkles size={16} className="btn-finish-icon" />
                         </motion.button>
                     )}
                 </AnimatePresence>

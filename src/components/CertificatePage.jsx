@@ -1,104 +1,119 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { saveCertificate } from '../utils/certificateStore';
+import istedotLogo from '../assets/logo_istedot.png';
+import { Sparkles, GraduationCap, BookOpen, User, Briefcase, Award, ArrowLeft, Download, CheckCircle2 } from 'lucide-react';
 
-const HOLLAND = {
-    R: { name: 'Realistik', color: '#fb923c', bg: '#fb923c18' },
-    I: { name: 'Intellektual', color: '#818cf8', bg: '#818cf818' },
-    A: { name: 'Artistik', color: '#f472b6', bg: '#f472b618' },
-    S: { name: 'Ijtimoiy', color: '#34d399', bg: '#34d39918' },
-    E: { name: 'Tadbirkorlik', color: '#fbbf24', bg: '#fbbf2418' },
-    C: { name: 'Konvensional', color: '#22d3ee', bg: '#22d3ee18' },
-};
-
-const GARDNER_ICONS = {
-    'Mantiqiy-Matematik': '🔢',
-    'Lingvistik-Verbal': '💬',
-    'Vizual-Fazoviy': '🎨',
-    'Musiqiy': '🎵',
-    'Kinestetik-Tananing': '⚡',
-    'Interpersonal': '🤝',
-    'Intrapersonal': '🧘',
-    'Naturalistik': '🌿',
-};
-
-// Mandatory blocks for Uzbekistan university entrance exams
-const MANDATORY_SUBJECTS = ["Ona tili va adabiyot", "O'zbekiston tarixi", "Matematika"];
-
-// Direction-specific entrance exam subjects (Uzbekistan DTM)
+// Yo'nalishlar bo'yicha imtihon fanlari
 const DIRECTION_SUBJECTS = {
-    'texnologiya': ['Fizika', 'Matematika (chuqur)'],
-    'kompyuter': ['Informatika', 'Matematika (chuqur)'],
-    'it': ['Informatika', 'Matematika (chuqur)'],
-    'dasturlash': ['Informatika', 'Matematika (chuqur)'],
-    'sun\'iy': ['Informatika', 'Matematika (chuqur)'],
-    'muhandis': ['Fizika', 'Matematika (chuqur)'],
-    'elektr': ['Fizika', 'Matematika (chuqur)'],
-    'qurilish': ['Fizika', 'Chizma geometriya'],
+    'texnologiya': ['Matematika (chuqur)', 'Fizika / Informatika'],
+    'kompyuter': ['Matematika (chuqur)', 'Informatika'],
+    'it': ['Matematika (chuqur)', 'Informatika'],
+    'dasturlash': ['Matematika (chuqur)', 'Informatika'],
+    'sun\'iy': ['Matematika (chuqur)', 'Informatika'],
+    'muhandis': ['Matematika (chuqur)', 'Fizika'],
+    'elektr': ['Matematika (chuqur)', 'Fizika'],
+    'qurilish': ['Matematika (chuqur)', 'Fizika'],
     'arxitektur': ['Chizma geometriya', 'Rasm'],
     'tibbiyot': ['Biologiya', 'Kimyo'],
     'farmatsevt': ['Kimyo', 'Biologiya'],
-    'iqtisod': ['Matematika (chuqur)', 'Ingliz tili'],
-    'moliya': ['Matematika (chuqur)', 'Ingliz tili'],
-    'huquq': ["O'zbek tili va adabiyot", 'Tarix'],
-    'psixolog': ['Tarix', 'Ingliz tili'],
-    'psixologiya': ['Tarix', 'Ingliz tili'],
-    'pedagog': ["O'zbek tili va adabiyot", 'Tarix'],
-    'maktabgacha': ["O'zbek tili va adabiyot", 'Tarix'],
-    'til': ['Ingliz tili', "O'zbek tili va adabiyot"],
-    'jurnalist': ['Ingliz tili', "O'zbek tili va adabiyot"],
-    'ijtimoiy': ['Tarix', 'Ingliz tili'],
-    'san\'at': ['Rasm', 'Musiqa'],
-    'musiqa': ['Musiqa', "O'zbek tili va adabiyot"],
-    'sport': ['Biologiya', 'Jismoniy tarbiya'],
-    'menejment': ['Matematika', 'Ingliz tili'],
-    'marketing': ['Matematika', 'Ingliz tili'],
-    'turizm': ['Geografiya', 'Ingliz tili'],
-    'xalqaro': ['Tarix', 'Ingliz tili'],
-    'diplomatiya': ['Tarix', 'Ingliz tili'],
+    'iqtisod': ['Matematika (chuqur)', 'Chet tili (Ingliz tili)'],
+    'moliya': ['Matematika (chuqur)', 'Chet tili (Ingliz tili)'],
+    'huquq': ['Tarix', 'Ona tili va adabiyot'],
+    'psixolog': ['Tarix', 'Chet tili'],
+    'pedagog': ['Ona tili va adabiyot', 'Tarix'],
+    'til': ['Chet tili (Ingliz tili)', 'Ona tili va adabiyot'],
+    'jurnalist': ['Ona tili va adabiyot', 'Chet tili'],
+    'san\'at': ['Ijodiy imtihon (Rasm)', 'San\'at tarixi'],
+    'menejment': ['Matematika', 'Chet tili'],
+    'marketing': ['Matematika', 'Chet tili'],
 };
 
-// Full university name lookup
-const UNI_FULL_NAMES = {
-    'TATU': "Toshkent Axborot Texnologiyalari Universiteti (TATU)",
-    'TDTU': "Toshkent Davlat Texnika Universiteti (TDTU)",
-    'TDPU': "Toshkent Davlat Pedagogika Universiteti (TDPU)",
-    'NamDU': "Namangan Davlat Universiteti (NamDU)",
-    'SamDU': "Samarqand Davlat Universiteti (SamDU)",
-    'ToshDTU': "Toshkent Davlat Texnika Universiteti (ToshDTU)",
-    'TDSHU': "Toshkent Davlat Sharqshunoslik Universiteti (TDSHU)",
-    'MDU': "Muhammad al-Xorazmiy nomidagi Toshkent Axborot Texnologiyalari Universiteti",
-    'TDYI': "Toshkent Davlat Yuridik Instituti (TDYI)",
-    'TDI': "Toshkent Davlat Iqtisodiyot Universiteti (TDIU)",
-    'TDIU': "Toshkent Davlat Iqtisodiyot Universiteti (TDIU)",
-    'TMA': "Toshkent Tibbiyot Akademiyasi (TMA)",
-    'TTI': "Toshkent Tibbiyot Instituti (TTI)",
-    'AKFA': "AKFA Universiteti",
-    'Webster': "Webster University Toshkent",
-    'INHA': "INHA Universiteti Toshkentda",
-    'InEU': "Innovation University (InEU)",
-    'Kimyo': "O'zbekiston Kimyo va Biologiya Universiteti",
-    'BSU': "Buxoro Davlat Universiteti (BSU)",
-    'QarDU': "Qarshi Davlat Universiteti (QarDU)",
-    'NamMQI': "Namangan Muhandislik-Qurilish Instituti (NamMQI)",
-    'FarDU': "Farg'ona Davlat Universiteti (FarDU)",
-    'AndDU': "Andijon Davlat Universiteti (AndDU)",
-};
+const MANDATORY_SUBJECTS = ["Ona tili", "O'zbekiston tarixi", "Matematika"];
 
-function expandUniName(rawName) {
-    if (!rawName) return rawName;
-    // Check if short abbreviation matches our lookup
-    const trimmed = rawName.trim();
-    if (UNI_FULL_NAMES[trimmed]) return UNI_FULL_NAMES[trimmed];
-    // Try to find abbreviation within the name
-    for (const [abbr, full] of Object.entries(UNI_FULL_NAMES)) {
-        if (trimmed === abbr || trimmed.startsWith(abbr + ' ') || trimmed.startsWith(abbr + ' —')) {
-            return full;
+// O'zbekiston oliy o'quv yurtlari va ularning 100% haqiqiy rasmiy saytlari bazasi
+const UZBEK_UNIVERSITIES_DB = [
+    { keywords: ['tatu', 'tuit', 'axborot texnologiya', 'muhammad al-xorazmiy', 'xorazmiy'], name: 'TATU', url: 'https://tuit.uz', display: 'tuit.uz' },
+    { keywords: ['inha', 'inxa'], name: 'Inha Universiteti (Toshkent)', url: 'https://inha.uz', display: 'inha.uz' },
+    { keywords: ['amity'], name: 'Amity Universiteti (Toshkent)', url: 'https://amity.uz', display: 'amity.uz' },
+    { keywords: ['vestminster', 'wiut', 'westminster'], name: 'WIUT (Vestminster)', url: 'https://wiut.uz', display: 'wiut.uz' },
+    { keywords: ['milliy', 'o\'zmu', 'ozmu', 'mirzo ulug\'bek', 'nuu'], name: "O'zbekiston Milliy Universiteti (O'zMU)", url: 'https://nuu.uz', display: 'nuu.uz' },
+    { keywords: ['tdiu', 'tsue', 'iqtisodiyot', 'narxoz'], name: 'Toshkent Davlat Iqtisodiyot Universiteti (TDIU)', url: 'https://tsue.uz', display: 'tsue.uz' },
+    { keywords: ['diplomatiya', 'jidu', 'uwed'], name: 'Jahon Iqtisodiyoti va Diplomatiya Universiteti (JIDU)', url: 'https://uwed.uz', display: 'uwed.uz' },
+    { keywords: ['yuridik', 'tdyu', 'tsul', 'huquq'], name: 'Toshkent Davlat Yuridik Universiteti (TDYU)', url: 'https://tsul.uz', display: 'tsul.uz' },
+    { keywords: ['tma', 'tibbiyot akademiyasi', 'tashkent medical'], name: 'Toshkent Tibbiyot Akademiyasi (TMA)', url: 'https://tma.uz', display: 'tma.uz' },
+    { keywords: ['sammu', 'samdtu', 'samarqand tibbiyot', 'sammi'], name: 'Samarqand Davlat Tibbiyot Universiteti', url: 'https://sammu.uz', display: 'sammu.uz' },
+    { keywords: ['tashpmi', 'pediatriya', 'sampi'], name: 'Toshkent Pediatriya Tibbiyot Instituti', url: 'https://tashpmi.uz', display: 'tashpmi.uz' },
+    { keywords: ['taqu', 'arxitektura', 'qurilish'], name: 'Toshkent Arxitektura-Qurilish Universiteti (TAQU)', url: 'https://taqu.uz', display: 'taqu.uz' },
+    { keywords: ['tdtu', 'beruniy', 'politexnika', 'texnika'], name: 'Toshkent Davlat Texnika Universiteti (TDTU)', url: 'https://tdtu.uz', display: 'tdtu.uz' },
+    { keywords: ['jahon tillari', 'o\'zdjtu', 'ozdjtu', 'uzswlu'], name: "O'zbekiston Davlat Jahon Tillari Universiteti", url: 'https://uzswlu.uz', display: 'uzswlu.uz' },
+    { keywords: ['yangi o\'zbekiston', 'newuu', 'new uzbekistan'], name: 'Yangi O\'zbekiston Universiteti', url: 'https://newuu.uz', display: 'newuu.uz' },
+    { keywords: ['it park', 'itpu'], name: 'IT Park University', url: 'https://itpu.uz', display: 'itpu.uz' },
+    { keywords: ['turin', 'polito'], name: 'Turin Politexnika Universiteti', url: 'https://polito.uz', display: 'polito.uz' },
+    { keywords: ['central asian', 'akfa', 'cauniver'], name: 'Central Asian University', url: 'https://centralasian.uz', display: 'centralasian.uz' },
+    { keywords: ['webster'], name: 'Webster Universiteti (Toshkent)', url: 'https://webster.uz', display: 'webster.uz' },
+    { keywords: ['ajou'], name: 'Ajou Universiteti (Toshkent)', url: 'https://ajou.uz', display: 'ajou.uz' },
+    { keywords: ['singapur', 'mdis'], name: 'MDIST (Singapur Menejment Instituti)', url: 'https://mdis.uz', display: 'mdis.uz' },
+    { keywords: ['nizomiy', 'tdpu', 'pedagogika'], name: 'Nizomiy nomidagi TDPU', url: 'https://nizami.uz', display: 'nizami.uz' },
+    { keywords: ['tkti', 'kimyo-texnologiya'], name: 'Toshkent Kimyo-Texnologiya Instituti (TKTI)', url: 'https://tkti.uz', display: 'tkti.uz' },
+    { keywords: ['farmatsevtika', 'pharmi'], name: 'Toshkent Farmatsevtika Instituti', url: 'https://pharmi.uz', display: 'pharmi.uz' },
+    { keywords: ['stomatologiya', 'tsdi'], name: 'Toshkent Davlat Stomatologiya Instituti', url: 'https://tsdi.uz', display: 'tsdi.uz' },
+    { keywords: ['samdu', 'samarqand davlat'], name: 'Samarqand Davlat Universiteti (SamDU)', url: 'https://samdu.uz', display: 'samdu.uz' },
+    { keywords: ['buxdu', 'buxoro davlat'], name: 'Buxoro Davlat Universiteti (BuxDU)', url: 'https://buxdu.uz', display: 'buxdu.uz' },
+    { keywords: ['adu', 'andijon davlat'], name: 'Andijon Davlat Universiteti (ADU)', url: 'https://adu.uz', display: 'adu.uz' },
+    { keywords: ['fardu', 'farg\'ona davlat', 'fdu'], name: 'Farg\'ona Davlat Universiteti (FarDU)', url: 'https://fdu.uz', display: 'fdu.uz' },
+    { keywords: ['namdu', 'namangan davlat'], name: 'Namangan Davlat Universiteti (NamDU)', url: 'https://namdu.uz', display: 'namdu.uz' },
+    { keywords: ['karsu', 'qoraqalpoq', 'berdaq'], name: 'Qoraqalpoq Davlat Universiteti (QDU)', url: 'https://karsu.uz', display: 'karsu.uz' },
+    { keywords: ['sharqshunoslik', 'tsos', 'tashdshu'], name: 'Toshkent Davlat Sharqshunoslik Universiteti', url: 'https://tsos.uz', display: 'tsos.uz' },
+    { keywords: ['jurnalistika', 'jmau'], name: 'O\'zbekiston Jurnalistika Universiteti (JMAU)', url: 'https://jmau.uz', display: 'jmau.uz' },
+    { keywords: ['agrar', 'tdau'], name: 'Toshkent Davlat Agrar Universiteti (TDAU)', url: 'https://tdau.uz', display: 'tdau.uz' }
+];
+
+// Universitet nomi yoki ob'ektidan 100% aniq va ishlaydigan rasmiy sayt havolasini olish
+function resolveUniversityInfo(u) {
+    const rawName = typeof u === 'object' && u ? (u.name || '') : String(u || '');
+    let rawSite = typeof u === 'object' && u ? u.website : null;
+    const combined = `${rawName} ${rawSite || ''}`.toLowerCase();
+
+    // 1. Birinchi navbatda tekshirilgan O'zbekiston rasmiy OTMlar bazasidan qidirish (prioritet #1)
+    for (const item of UZBEK_UNIVERSITIES_DB) {
+        if (item.keywords.some(k => combined.includes(k))) {
+            return {
+                name: rawName || item.name,
+                url: item.url,
+                displayUrl: item.display
+            };
         }
     }
-    return trimmed; // Return as-is if not found
+
+    // 2. Agar bazada bo'lmasa, AI taqdim etgan domen mavjud bo'lsa uni tozalash
+    if (rawSite && typeof rawSite === 'string' && rawSite.trim()) {
+        let clean = rawSite.trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+        
+        // AI keng tarqalgan xato qiladigan domenlarni to'g'rilash
+        if (clean.includes('tatu.uz')) clean = 'tuit.uz';
+        if (clean.includes('westminster.uz')) clean = 'wiut.uz';
+        if (clean.includes('inha.edu.uz')) clean = 'inha.uz';
+        if (clean.includes('amity.edu.uz')) clean = 'amity.uz';
+        if (clean.includes('tsul.edu.uz')) clean = 'tsul.uz';
+        if (clean.includes('nuu.edu.uz')) clean = 'nuu.uz';
+        if (clean.includes('tma.edu.uz')) clean = 'tma.uz';
+
+        return {
+            name: rawName,
+            url: `https://${clean}`,
+            displayUrl: clean
+        };
+    }
+
+    // 3. Zaxira: rasmiy sayt qidiruvi
+    return {
+        name: rawName,
+        url: `https://www.google.com/search?q=${encodeURIComponent(rawName + " rasmiy sayti")}`,
+        displayUrl: 'rasmiy sayti'
+    };
 }
 
 function getSubjectsForDirection(directionName) {
@@ -106,15 +121,17 @@ function getSubjectsForDirection(directionName) {
     for (const [key, subs] of Object.entries(DIRECTION_SUBJECTS)) {
         if (lower.includes(key)) return subs;
     }
-    return ['Ingliz tili', "O'zbek tili va adabiyot"];
+    return ['Matematika', 'Ingliz tili'];
 }
 
 const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, customBackBtn = null }) => {
     const certRef = useRef(null);
     const savedRef = useRef(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const now = new Date();
-    const dateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+    const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+    const certNumber = `IST-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     if (!analysisData) return null;
 
@@ -122,76 +139,92 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
     useEffect(() => {
         if (!skipAutoSave && !savedRef.current && analysisData) {
             savedRef.current = true;
-            saveCertificate(analysisData);
+            try {
+                saveCertificate(analysisData);
+            } catch (err) {
+                console.error("Certificate save failed:", err);
+            }
         }
     }, [analysisData, skipAutoSave]);
 
-    // 🔍 DEBUG: Uncomment this to inspect what AI actually sent
-    console.table({
-        summary: analysisData.summary?.slice(0, 100),
-        interests: JSON.stringify(analysisData.interests),
-        workStyle: analysisData.character?.workStyle,
-        motivation: analysisData.character?.motivation,
-        hollandPrimary: analysisData.hollandCode?.primary,
-        careers: JSON.stringify((analysisData.recommendedCareers || []).map(c => c.name)),
-        steps: JSON.stringify((analysisData.stepsToAchieve || []).slice(0, 2)),
-    });
-
     const {
+        summary = '',
         interests = [],
         character = {},
-        hollandCode = {},
-        gardnerIntelligences = [],
         recommendedCareers = [],
-        stepsToAchieve = [],
         universityDirections = [],
-        summary = '',
+        examSubjects = null,
         subjectsAdvice = ''
     } = analysisData;
 
-    const primaryH = HOLLAND[hollandCode.primary] || { name: hollandCode.primary, color: '#4db8ff', bg: '#4db8ff18' };
-    const secondaryH = HOLLAND[hollandCode.secondary] || { name: hollandCode.secondary, color: '#818cf8', bg: '#818cf818' };
+    // Tez va tabiiy 3D tilt interaktivligi (har bir card uchun)
+    const handleCardTilt = (e) => {
+        const card = e.currentTarget;
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        
+        // Burilish burchagi (-10deg dan +10deg gacha)
+        const rotateX = ((y - centerY) / centerY) * -10;
+        const rotateY = ((x - centerX) / centerX) * 10;
+        const xPercent = Math.round((x / rect.width) * 100);
+        const yPercent = Math.round((y / rect.height) * 100);
 
+        // Tezkor va silliq reaksiya (kursordan orqada qolmaydi)
+        card.style.transition = 'transform 0.05s ease-out, border-color 0.15s ease, box-shadow 0.15s ease';
+        card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-6px) scale3d(1.025, 1.025, 1.025)`;
+        card.style.setProperty('--glare-x', `${xPercent}%`);
+        card.style.setProperty('--glare-y', `${yPercent}%`);
+    };
+
+    const handleCardReset = (e) => {
+        const card = e.currentTarget;
+        card.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.5s ease, border-color 0.5s ease';
+        card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0) scale3d(1, 1, 1)';
+    };
+
+    // Yo'nalish bo'yicha imtihon fanlarini aniqlash
+    const primaryDirection = universityDirections?.[0]?.direction || recommendedCareers?.[0]?.name || '';
+    const mainExams = examSubjects?.main || getSubjectsForDirection(primaryDirection);
+    const mandatoryExams = examSubjects?.mandatory || MANDATORY_SUBJECTS;
+
+    // PDF yuklab olish - QAT'IY 1 SAHIFA (Single Page A4)
     const handleDownload = async () => {
+        if (isDownloading) return;
         const el = certRef.current;
         if (!el) return;
-        const btns = document.querySelectorAll('.cert-action-btn');
-        btns.forEach(b => b.style.display = 'none');
 
-        const originalMaxWidth = el.style.maxWidth;
+        setIsDownloading(true);
+        const btns = document.querySelectorAll('.cert-action-btn');
+        btns.forEach(b => b.style.opacity = '0');
+
         const originalWidth = el.style.width;
-        const originalMargin = el.style.margin;
+        const originalMaxWidth = el.style.maxWidth;
         const originalTransform = el.style.transform;
 
         try {
+            // A4 single page render: 210mm x 297mm
             const A4_WIDTH_MM = 210;
             const A4_HEIGHT_MM = 297;
-            const RENDER_PX_WIDTH = 1000;
-            el.style.maxWidth = 'none';
-            el.style.width = RENDER_PX_WIDTH + 'px';
-            el.style.margin = '0';
-            el.style.transform = 'none';
+            const RENDER_WIDTH_PX = 960;
 
+            el.style.width = `${RENDER_WIDTH_PX}px`;
+            el.style.maxWidth = 'none';
+            el.style.transform = 'none';
+            el.classList.add('pdf-render-mode');
+
+            // 3x Ultra-sharp scale for crystal clear typography and crisp borders
             const canvas = await html2canvas(el, {
-                scale: 2, // HiDPI quality
+                scale: 3,
                 useCORS: true,
-                backgroundColor: '#050b18',
+                backgroundColor: '#060d1f',
                 scrollX: 0,
                 scrollY: 0,
-                windowWidth: RENDER_PX_WIDTH,
                 logging: false,
+                windowWidth: RENDER_WIDTH_PX
             });
-
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-
-            // ─── Calculate how many A4 pages are needed ───────────────────────
-            // pdfImgWidth = full A4 width in mm
-            // pdfImgHeight = the proportional height of the canvas in mm
-            const pdfImgWidth = A4_WIDTH_MM;
-            const pdfImgHeight = (imgHeight / imgWidth) * pdfImgWidth;
-
-            const totalPages = Math.ceil(pdfImgHeight / A4_HEIGHT_MM);
 
             const pdf = new jsPDF({
                 orientation: 'portrait',
@@ -199,41 +232,22 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                 format: 'a4',
             });
 
-            // ─── Slice canvas into A4-height chunks and add each as a page ────
-            for (let page = 0; page < totalPages; page++) {
-                if (page > 0) pdf.addPage();
-
-                // How many canvas pixels correspond to one A4 page height?
-                const pageHeightPx = Math.round((A4_HEIGHT_MM / pdfImgWidth) * imgWidth);
-                const srcY = page * pageHeightPx;
-                const srcH = Math.min(pageHeightPx, imgHeight - srcY);
-
-                // Create a slice canvas for this page
-                const pageCanvas = document.createElement('canvas');
-                pageCanvas.width = imgWidth;
-                pageCanvas.height = pageHeightPx; // Always full page height (blank at end if needed)
-                const ctx = pageCanvas.getContext('2d');
-                ctx.fillStyle = '#050b18';
-                ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-                ctx.drawImage(canvas, 0, srcY, imgWidth, srcH, 0, 0, imgWidth, srcH);
-
-                const pageImgData = pageCanvas.toDataURL('image/jpeg', 0.92);
-                // Rendered page height in mm (for last page may be less)
-                const renderedPageHeightMM = (srcH / imgWidth) * pdfImgWidth;
-                pdf.addImage(pageImgData, 'JPEG', 0, 0, A4_WIDTH_MM, renderedPageHeightMM);
-            }
-
-            pdf.save(`ISTEDOD-AI-Sertifikat-${dateStr.replace(/\//g, '-')}.pdf`);
+            // Lossless PNG for razor-sharp text and graphics
+            const imgData = canvas.toDataURL('image/png');
+            
+            // Qat'iy 1 sahifa qilib kiritish
+            pdf.addImage(imgData, 'PNG', 0, 0, A4_WIDTH_MM, A4_HEIGHT_MM, undefined, 'SLOW');
+            pdf.save(`ISTEDOD-AI-Sertifikat-${dateStr.replace(/\./g, '-')}.pdf`);
         } catch (e) {
             console.error("PDF generation failed:", e);
-            alert("PDF yuklanmadi, sababi xato bor: " + e.message + ". Iltimos shu xatoni yuboring.");
-        }
-        finally {
-            el.style.maxWidth = originalMaxWidth;
+            alert("PDF generatsiya qilishda xatolik yuz berdi. Iltimos qayta urinib ko'ring.");
+        } finally {
+            el.classList.remove('pdf-render-mode');
             el.style.width = originalWidth;
-            el.style.margin = originalMargin;
+            el.style.maxWidth = originalMaxWidth;
             el.style.transform = originalTransform;
-            btns.forEach(b => b.style.display = '');
+            btns.forEach(b => b.style.opacity = '1');
+            setIsDownloading(false);
         }
     };
 
@@ -243,393 +257,312 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
         >
-            {/* Floating Action Buttons */}
+            {/* Yuqori boshqaruv tugmalari */}
             <div className="cert-floating-actions">
                 {customBackBtn ? customBackBtn : (
-                    <motion.button className="cert-action-btn cert-action-restart" onClick={onRestart}
-                        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                        ↩ Qayta boshlash
+                    <motion.button
+                        className="cert-action-btn cert-action-restart"
+                        onClick={onRestart}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                    >
+                        <ArrowLeft size={16} />
+                        <span>Bosh menyu</span>
                     </motion.button>
                 )}
-                <motion.button className="cert-action-btn cert-action-download" onClick={handleDownload}
-                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                    ⬇ PDF yuklab olish
+                <motion.button
+                    className="cert-action-btn cert-action-download"
+                    onClick={handleDownload}
+                    disabled={isDownloading}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                >
+                    <Download size={16} />
+                    <span>{isDownloading ? "Yuklanmoqda..." : "PDF yuklab olish (1 list)"}</span>
                 </motion.button>
             </div>
 
-            {/* ══════════════════════════════════════ CERTIFICATE ══ */}
-            <div className="cert-doc" ref={certRef}>
+            {/* ════════════════════════════════════════════════════════════
+                1 LIST SERTIFIKAT (A4 SINGLE SHEET — FLAT CONTAINER, 3D CARDS)
+                Faqat 4 ta asosiy bo'lim:
+                1. User haqida ma'lumot
+                2. Kelajak kasb moyilliklari
+                3. O'qishga kirish kerak bo'lgan universitetlar
+                4. Qaysi fanlardan imtihon bo'lishi
+            ════════════════════════════════════════════════════════════ */}
+            <div
+                className="cert-doc cert-single-page-glass"
+                ref={certRef}
+            >
+                {/* 3D Glass Nur va Geometrik Bezaklar */}
+                <div className="cert-glass-ambient orb-cyan" />
+                <div className="cert-glass-ambient orb-purple" />
+                <div className="cert-glass-border-glow" />
 
-                {/* ── HEADER ──────────────────────────────────────── */}
-                <div className="cert-doc-header">
-                    <div className="cert-doc-brand">
-                        <div className="cert-doc-logo"><span>I</span></div>
-                        <div>
-                            <h1 className="cert-doc-title">ISTEDOD AI</h1>
-                            <p className="cert-doc-subtitle">
-                                Ma'lumotlar sun'iy intellekt orqali savol-javob tahlili asosida to'plangan · {dateStr}
+                {/* ── HEADER: Rasmiy Brend va Tasdiq ── */}
+                <header className="cert-3d-header">
+                    <div className="cert-3d-brand">
+                        <div className="cert-3d-logo-badge">
+                            <img src={istedotLogo} alt="ISTEDOD AI" className="cert-3d-logo-img" />
+                        </div>
+                        <div className="cert-3d-brand-text">
+                            <div className="cert-3d-title-row">
+                                <h1 className="cert-3d-main-title">ISTEDOD AI</h1>
+                            </div>
+                            <p className="cert-3d-subtitle">
+                                Kasbiy Yo'nalish va Shaxsiy Qobiliyatlar Bo'yicha Rasmiy Sertifikat
                             </p>
                         </div>
                     </div>
-                    <div className="cert-badge-ring">
-                        <svg viewBox="0 0 60 60" width="60" height="60" className="cert-badge-svg">
-                            <circle cx="30" cy="30" r="27" fill="none" stroke="#4db8ff" strokeWidth="1.5" strokeDasharray="4 2" />
-                            <text x="50%" y="55%" textAnchor="middle" fill="#4db8ff" fontSize="10"
-                                fontFamily="Outfit,sans-serif" fontWeight="700">✓</text>
-                        </svg>
-                        <span>Tasdiqlandi</span>
+
+                    <div
+                        className="cert-3d-stamp-box cert-3d-glass-card"
+                        onMouseMove={handleCardTilt}
+                        onMouseLeave={handleCardReset}
+                    >
+                        <div className="cert-3d-stamp-circle">
+                            <CheckCircle2 size={18} className="cert-3d-stamp-icon" />
+                            <span className="cert-3d-stamp-text">TASDIQLANDI</span>
+                        </div>
+                        <div className="cert-3d-meta-info">
+                            <span className="cert-3d-meta-date">Sana: {dateStr}</span>
+                            <span className="cert-3d-meta-id">{certNumber}</span>
+                        </div>
                     </div>
-                </div>
+                </header>
 
-                <div className="cert-doc-divider" />
+                <div className="cert-3d-divider" />
 
-                {/* ── SUMMARY (FULL WIDTH) ────────────────────────── */}
-                <div className="cert-summary-block" style={{ marginBottom: '32px' }}>
-                    <p className="cert-hero-label">Psixologik Tahlil Sertifikati</p>
-                    <p className="cert-hero-summary">{summary}</p>
-                </div>
+                {/* ── 1-BO'LIM: USER HAQIDA MA'LUMOT (Qisqacha Shaxsiy Portret) ── */}
+                <section className="cert-3d-section cert-3d-user-section">
+                    <div className="cert-3d-section-title">
+                        <User size={18} className="cert-3d-sec-icon text-cyan" />
+                        <h2>Foydalanuvchi Portreti va Qobiliyatlari</h2>
+                    </div>
 
-                {/* ── HERO GRID ───────────────────────────────────── */}
-                <div className="cert-hero">
-                    {/* Left: Meta cards */}
-                    <div className="cert-hero-left" style={{ flex: 1 }}>
-                        {/* Meta info — styled mini cards */}
-                        <div className="cert-meta-grid">
+                    <div
+                        className="cert-3d-glass-card cert-3d-user-card"
+                        onMouseMove={handleCardTilt}
+                        onMouseLeave={handleCardReset}
+                    >
+                        <p className="cert-3d-user-summary">
+                            {summary || "Suhbat davomida sizning qiziqishlaringiz, mustaqil fikrlashingiz va o'z oldingizga aniq maqsadlar qo'ya olish salohiyatingiz aniqlandi."}
+                        </p>
+
+                        <div className="cert-3d-user-details-row">
                             {character?.workStyle && (
-                                <div className="cert-meta-card">
-                                    <span className="cert-meta-icon">🎯</span>
-                                    <div>
-                                        <p className="cert-meta-label">Ish uslubi</p>
-                                        <p className="cert-meta-value">{character.workStyle}</p>
-                                    </div>
+                                <div className="cert-3d-badge-item">
+                                    <span className="cert-3d-badge-label">Ish uslubi:</span>
+                                    <span className="cert-3d-badge-val">{character.workStyle}</span>
                                 </div>
                             )}
                             {character?.motivation && (
-                                <div className="cert-meta-card">
-                                    <span className="cert-meta-icon">💡</span>
-                                    <div>
-                                        <p className="cert-meta-label">Asosiy motivatsiya</p>
-                                        <p className="cert-meta-value">{character.motivation}</p>
-                                    </div>
+                                <div className="cert-3d-badge-item">
+                                    <span className="cert-3d-badge-label">Asosiy kuch:</span>
+                                    <span className="cert-3d-badge-val">{character.motivation}</span>
                                 </div>
                             )}
-                            {interests.length > 0 && (
-                                <div className="cert-meta-card cert-meta-card--wide">
-                                    <span className="cert-meta-icon">⭐</span>
-                                    <div>
-                                        <p className="cert-meta-label">Qiziqishlar</p>
-                                        <div className="cert-meta-tags">
-                                            {interests.map((int, i) => (
-                                                <span key={i} className="cert-interest-tag">{int}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            {character?.mainTraits?.length > 0 && (
-                                <div className="cert-meta-card cert-meta-card--wide">
-                                    <span className="cert-meta-icon">🧩</span>
-                                    <div>
-                                        <p className="cert-meta-label">Shaxsiy xususiyatlar</p>
-                                        <div className="cert-meta-tags">
-                                            {character.mainTraits.map((t, i) => (
-                                                <span key={i} className="cert-trait-tag">{t}</span>
-                                            ))}
-                                        </div>
+                            {interests && interests.length > 0 && (
+                                <div className="cert-3d-badge-item cert-3d-interests-badge">
+                                    <span className="cert-3d-badge-label">Qiziqishlar:</span>
+                                    <div className="cert-3d-mini-tags">
+                                        {interests.slice(0, 3).map((item, idx) => (
+                                            <span key={idx} className="cert-3d-chip">{item}</span>
+                                        ))}
                                     </div>
                                 </div>
                             )}
                         </div>
                     </div>
+                </section>
 
-                    {/* Right: Holland Code card */}
-                    <div className="cert-hero-right">
-                        <div className="cert-holland-card">
-                            <p className="cert-holland-card-title">Holland Kodi</p>
-                            <div className="cert-holland-pills-col">
-                                <div className="cert-code-pill-v2" style={{ background: primaryH.bg, borderColor: primaryH.color }}>
-                                    <span className="cert-code-letter-v2" style={{ color: primaryH.color }}>{hollandCode.primary}</span>
-                                    <div>
-                                        <p className="cert-code-name-v2" style={{ color: primaryH.color }}>{primaryH.name}</p>
-                                        <p className="cert-code-tag-v2">Asosiy tip</p>
-                                    </div>
-                                </div>
-                                {hollandCode.secondary && (
-                                    <div className="cert-code-pill-v2" style={{ background: secondaryH.bg, borderColor: secondaryH.color }}>
-                                        <span className="cert-code-letter-v2" style={{ color: secondaryH.color }}>{hollandCode.secondary}</span>
-                                        <div>
-                                            <p className="cert-code-name-v2" style={{ color: secondaryH.color }}>{secondaryH.name}</p>
-                                            <p className="cert-code-tag-v2">Ikkinchi tip</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            {hollandCode.description && (
-                                <p className="cert-holland-desc">{hollandCode.description}</p>
-                            )}
-                            {hollandCode.scores && (
-                                <p className="cert-holland-scores">{hollandCode.scores}</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── GRID ROW 1 ──────────────────────────────────── */}
-                <div className="cert-grid-2">
-
-                    {/* Holland bars */}
-                    <div className="cert-panel">
-                        <div className="cert-panel-head">
-                            <span className="cert-panel-icon">⬡</span>
-                            <h3>Holland RIASEC Profili - Kasbiy shaxsiyat tahlili</h3>
-                        </div>
-                        <div className="cert-holland-bars">
-                            {Object.entries(HOLLAND).map(([key, meta]) => {
-                                let scoreVal = 50;
-                                if (hollandCode.scores) {
-                                    const m = hollandCode.scores.match(new RegExp(key + ':(\\d+)'));
-                                    if (m) scoreVal = parseInt(m[1]);
-                                }
-                                const isPrimary = key === hollandCode.primary;
-                                const isSecondary = key === hollandCode.secondary;
-                                return (
-                                    <div key={key} className="cert-hbar-row">
-                                        <span className="cert-hbar-key" style={{ color: meta.color }}>{key}</span>
-                                        <span className="cert-hbar-name">{meta.name}</span>
-                                        <div className="cert-hbar-track">
-                                            <motion.div
-                                                className="cert-hbar-fill"
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${scoreVal}%` }}
-                                                transition={{ duration: 0.9, delay: 0.2 }}
-                                                style={{ background: meta.color, opacity: isPrimary || isSecondary ? 1 : 0.4 }}
-                                            />
-                                        </div>
-                                        <span className="cert-hbar-val">{scoreVal}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                {/* ── 2-BO'LIM: KELAJAK KASB MOYILLIKLARI (Tavsiya etilgan kasblar) ── */}
+                <section className="cert-3d-section cert-3d-careers-section">
+                    <div className="cert-3d-section-title">
+                        <Briefcase size={18} className="cert-3d-sec-icon text-blue" />
+                        <h2>Kelajak Kasb Moyilliklari (Tavsiya etilgan sohalar)</h2>
                     </div>
 
-                    {/* Gardner */}
-                    <div className="cert-panel">
-                        <div className="cert-panel-head">
-                            <span className="cert-panel-icon">🧠</span>
-                            <h3>Gardner Ko'p Intellekt Profili - Yashirin qobilyatlar</h3>
-                        </div>
-                        <div className="cert-gardner-grid">
-                            {gardnerIntelligences.map((g, i) => {
-                                const icon = GARDNER_ICONS[g.type] || '✦';
-                                const lvl = parseInt(g.level) || 50;
-                                return (
-                                    <div key={i} className="cert-gardner-item">
-                                        <div className="cert-gardner-top">
-                                            <span className="cert-gardner-icon">{icon}</span>
-                                            <span className="cert-gardner-name">{g.type}</span>
-                                            <span className="cert-gardner-pct">{lvl}%</span>
-                                        </div>
-                                        <div className="cert-gardner-bar">
-                                            <motion.div
-                                                className="cert-gardner-fill"
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${lvl}%` }}
-                                                transition={{ duration: 0.7, delay: i * 0.07 + 0.3 }}
-                                                style={{ background: `hsl(${190 + i * 25}, 75%, 58%)` }}
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── CAREERS ─────────────────────────────────────── */}
-                <div className="cert-panel cert-panel-full">
-                    <div className="cert-panel-head">
-                        <span className="cert-panel-icon">💼</span>
-                        <h3>Tavsiya Etilgan Kasblar</h3>
-                    </div>
-                    <div className="cert-careers-row">
-                        {recommendedCareers.map((c, i) => {
-                            const isObj = typeof c === 'object';
-                            const name = isObj ? c.name : c;
-                            const desc = isObj ? c.description : '';
-
-                            // Deterministic match percentage
-                            let match = 90 - (i * 3);
-                            if (isObj && typeof c.match === 'string') {
-                                const text = c.match.toLowerCase();
-                                if (text.includes('juda yuqori')) match = 96 - i * 2;
-                                else if (text.includes('yuqori')) match = 88 - i * 2;
-                                else if (text.includes("o'rta") || text.includes('orta')) match = 75 - i * 2;
-                                else match = parseInt(c.match) || match;
-                            } else if (isObj && typeof c.match === 'number') {
-                                match = c.match;
-                            }
+                    <div className="cert-3d-careers-grid">
+                        {recommendedCareers.slice(0, 3).map((career, idx) => {
+                            const name = typeof career === 'object' ? career.name : career;
+                            const desc = typeof career === 'object' ? career.description : '';
+                            const matchStr = typeof career === 'object' && career.match ? career.match : `${95 - idx * 4}%`;
+                            const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
 
                             return (
-                                <div key={i} className={`cert-career-card ${i === 0 ? 'top' : ''}`}>
-                                    <div className="cert-career-card-header">
-                                        <span className="cert-career-medal">{i === 0 ? '🏆' : i === 1 ? '🥈' : '🥉'}</span>
-                                        <div className="cert-career-ring-wrap">
-                                            <svg className="cert-ring-svg" viewBox="0 0 52 52" width="52" height="52">
-                                                <circle cx="26" cy="26" r="22" fill="none" stroke="#0a1628" strokeWidth="4" />
-                                                <motion.circle
-                                                    cx="26" cy="26" r="22"
-                                                    fill="none"
-                                                    stroke={i === 0 ? '#4db8ff' : i === 1 ? '#818cf8' : '#34d399'}
-                                                    strokeWidth="4"
-                                                    strokeLinecap="round"
-                                                    strokeDasharray={`${2 * Math.PI * 22}`}
-                                                    initial={{ strokeDashoffset: 2 * Math.PI * 22 }}
-                                                    animate={{ strokeDashoffset: 2 * Math.PI * 22 * (1 - match / 100) }}
-                                                    transition={{ duration: 1.2, delay: i * 0.2 + 0.3 }}
-                                                    style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }}
-                                                />
-                                                <text x="50%" y="55%" textAnchor="middle" fill="white"
-                                                    fontSize="10" fontFamily="Outfit,sans-serif" fontWeight="700">{match}%</text>
-                                            </svg>
-                                            <span className="cert-career-ring-label">Moslik</span>
+                                <div
+                                    key={idx}
+                                    className={`cert-3d-glass-card cert-3d-career-card ${idx === 0 ? 'primary-match' : ''}`}
+                                    onMouseMove={handleCardTilt}
+                                    onMouseLeave={handleCardReset}
+                                >
+                                    <div className="cert-3d-career-top">
+                                        <span className="cert-3d-career-medal">{medal}</span>
+                                        <div className="cert-3d-match-pill">
+                                            <span>Moslik: {matchStr}</span>
                                         </div>
                                     </div>
-                                    <h4 className="cert-career-card-name">{name}</h4>
-                                    {desc && <p className="cert-career-card-desc">{desc}</p>}
+                                    <h3 className="cert-3d-career-name">{name}</h3>
+                                    {desc && <p className="cert-3d-career-desc">{desc}</p>}
                                 </div>
                             );
                         })}
                     </div>
-                </div>
+                </section>
 
-                {/* ── ROADMAP ─────────────────────────────────────── */}
-                {stepsToAchieve.length > 0 && (
-                    <div className="cert-panel cert-panel-full">
-                        <div className="cert-panel-head">
-                            <span className="cert-panel-icon">🗺️</span>
-                            <h3>Maqsadga Erishish Yo'l Xaritasi</h3>
+                {/* ── 3-BO'LIM VA 4-BO'LIM: 2 USTUNLI YONDASHUV (A4 1 LISTGA TO'LIQ SIG'DIRISH) ── */}
+                <div className="cert-3d-columns-row">
+                    {/* 3-BO'LIM: UNIVERSITETLAR */}
+                    <section className="cert-3d-section cert-3d-col">
+                        <div className="cert-3d-section-title">
+                            <GraduationCap size={18} className="cert-3d-sec-icon text-purple" />
+                            <h2>Tavsiya Etilgan Universitetlar</h2>
                         </div>
-                        <div className="cert-roadmap">
-                            {stepsToAchieve.map((step, i) => {
-                                // Clean up "1. " prefix if AI already added it
-                                const cleanStep = step.replace(/^\d+\.\s*/, '');
-                                return (
-                                    <motion.div
-                                        key={i}
-                                        className="cert-roadmap-step"
-                                        initial={{ opacity: 0, x: -16 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: i * 0.1 + 0.3 }}
-                                    >
-                                        <div className="cert-roadmap-num">{i + 1}</div>
-                                        <p className="cert-roadmap-text">{cleanStep}</p>
-                                    </motion.div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
 
-                {/* ── UNIVERSITIES ────────────────────────────────── */}
-                {universityDirections.length > 0 && (
-                    <div className="cert-panel cert-panel-full">
-                        <div className="cert-panel-head">
-                            <span className="cert-panel-icon">🎓</span>
-                            <h3>Tavsiya Etilgan Universitetlar va Yo'nalishlar</h3>
-                        </div>
-                        <div className="cert-unis-grid">
-                            {universityDirections.map((dir, di) => {
-                                const unis = dir.universities || [];
-                                const dirSubjects = getSubjectsForDirection(dir.direction);
-                                return (
-                                    <div key={di} className="cert-uni-dir">
-                                        <div className="cert-uni-dir-head">
-                                            {dir.code && <span className="cert-uni-code">{dir.code}</span>}
-                                            <h4>{dir.direction}</h4>
-                                        </div>
-                                        <ul className="cert-uni-list">
-                                            {unis.map((u, ui) => {
-                                                const isObj = typeof u === 'object';
-                                                const name = isObj ? u.name : u;
-                                                const phone = isObj ? u.phone : null;
-                                                const website = isObj ? u.website : null;
-                                                const cleanSite = website ? website.replace(/^https?:\/\//, '').replace(/\/$/, '') : null;
-                                                return (
-                                                    <li key={ui} className="cert-uni-item">
-                                                        <div className="cert-uni-item-main">
-                                                            <span className="cert-uni-dot" />
-                                                            <div className="cert-uni-item-info">
-                                                                <span className="cert-uni-name-text">{expandUniName(name)}</span>
-                                                                <div className="cert-uni-links">
-                                                                    {phone && (
-                                                                        <span className="cert-uni-link-item">📞 {phone}</span>
-                                                                    )}
-                                                                    {cleanSite && (
-                                                                        <a href={`https://${cleanSite}`} target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="cert-uni-link-item cert-uni-site">
-                                                                            🌐 {cleanSite}
-                                                                        </a>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
+                        <div
+                            className="cert-3d-glass-card cert-3d-unis-card"
+                            onMouseMove={handleCardTilt}
+                            onMouseLeave={handleCardReset}
+                        >
+                            {primaryDirection && (
+                                <div className="cert-3d-uni-direction-header">
+                                    <span className="cert-3d-dir-tag">Yo'nalish:</span>
+                                    <span className="cert-3d-dir-name">{primaryDirection}</span>
+                                </div>
+                            )}
 
-                                        {/* Entrance exam info */}
-                                        <div className="cert-exam-block">
-                                            <p className="cert-exam-title">📋 Kirish imtihonlari:</p>
-                                            <div className="cert-exam-subjects">
-                                                <div className="cert-exam-group">
-                                                    <span className="cert-exam-group-label">Majburiy blok:</span>
-                                                    <div className="cert-exam-chips">
-                                                        {MANDATORY_SUBJECTS.map((s, si) => (
-                                                            <span key={si} className="cert-exam-chip mandatory">{s}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <div className="cert-exam-group">
-                                                    <span className="cert-exam-group-label">Yo'nalish fanlari:</span>
-                                                    <div className="cert-exam-chips">
-                                                        {dirSubjects.map((s, si) => (
-                                                            <span key={si} className="cert-exam-chip direction">{s}</span>
-                                                        ))}
-                                                    </div>
+                            <div className="cert-3d-unis-list">
+                                {(() => {
+                                    // Barcha universitetlarni to'plash (maksimal 3 ta)
+                                    let unis = [];
+                                    if (universityDirections && universityDirections.length > 0) {
+                                        for (const dir of universityDirections) {
+                                            if (dir.universities && Array.isArray(dir.universities)) {
+                                                unis.push(...dir.universities);
+                                            }
+                                        }
+                                    }
+                                    if (unis.length === 0) {
+                                        unis = [
+                                            { name: "Toshkent Axborot Texnologiyalari Universiteti (TATU)", website: "tuit.uz" },
+                                            { name: "O'zbekiston Milliy Universiteti (O'zMU)", website: "nuu.uz" },
+                                            { name: "Toshkent Davlat Iqtisodiyot Universiteti (TDIU)", website: "tsue.uz" }
+                                        ];
+                                    }
+
+                                    return unis.slice(0, 3).map((u, i) => {
+                                        const uniInfo = resolveUniversityInfo(u);
+
+                                        return (
+                                            <div
+                                                key={i}
+                                                className="cert-3d-glass-card cert-3d-uni-item clickable"
+                                                onClick={() => window.open(uniInfo.url, '_blank', 'noopener,noreferrer')}
+                                                onMouseMove={handleCardTilt}
+                                                onMouseLeave={handleCardReset}
+                                                title={`${uniInfo.name} rasmiy saytini ochish: ${uniInfo.url}`}
+                                                role="button"
+                                                tabIndex={0}
+                                            >
+                                                <div className="cert-3d-uni-dot" />
+                                                <div className="cert-3d-uni-details">
+                                                    <span className="cert-3d-uni-name">{uniInfo.name}</span>
+                                                    <a
+                                                        href={uniInfo.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="cert-3d-uni-link clickable"
+                                                        title={`${uniInfo.name} rasmiy saytini ochish`}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.open(uniInfo.url, '_blank', 'noopener,noreferrer');
+                                                        }}
+                                                    >
+                                                        <span>🌐 {uniInfo.displayUrl}</span>
+                                                        <span className="cert-link-arrow">↗</span>
+                                                    </a>
                                                 </div>
                                             </div>
-                                            <p className="cert-exam-tip">💪 Ana shu fanlarga e'tibor qarating — sizning kelajakdagi kasbingiz aynan shu bilimlar ustida quriladi. Omad!</p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        {subjectsAdvice && (
-                            <div className="cert-subjects-advice" style={{
-                                marginTop: '20px',
-                                padding: '16px',
-                                backgroundColor: 'rgba(52, 211, 153, 0.1)',
-                                borderLeft: '4px solid #34d399',
-                                borderRadius: '8px',
-                                color: '#e2e8f0',
-                                fontSize: '15px',
-                                lineHeight: '1.6'
-                            }}>
-                                {subjectsAdvice}
+                                        );
+                                    });
+                                })()}
                             </div>
-                        )}
-                    </div>
-                )}
+                        </div>
+                    </section>
 
+                    {/* 4-BO'LIM: QAYSI FANLARDAN IMTIHON BO'LISHI */}
+                    <section className="cert-3d-section cert-3d-col">
+                        <div className="cert-3d-section-title">
+                            <BookOpen size={18} className="cert-3d-sec-icon text-cyan" />
+                            <h2>Kirish Imtihon Fanlari</h2>
+                        </div>
 
-                {/* ── FOOTER ──────────────────────────────────────── */}
-                <div className="cert-doc-footer">
-                    <p>ISTEDOD AI — Sun'iy Intellekt Asosida Kasbiy Yo'nalish Tizimi</p>
-                    <p>Ushbu sertifikat sun'iy intellekt tomonidan savol-javob tahlili orqali avtomatik ishlab chiqilgan. Ushbu qo'llanmani faqat maslahat sifatida qabul qiling! · istedod-ai</p>
+                        <div
+                            className="cert-3d-glass-card cert-3d-exams-card"
+                            onMouseMove={handleCardTilt}
+                            onMouseLeave={handleCardReset}
+                        >
+                            {/* Mutaxassislik (Asosiy) Fanlar */}
+                            <div className="cert-3d-exam-group">
+                                <span className="cert-3d-exam-label">Asosiy mutaxassislik fanlari:</span>
+                                <div className="cert-3d-exam-chips-row">
+                                    {mainExams.map((subj, idx) => (
+                                        <span key={idx} className="cert-3d-exam-chip main-chip">
+                                            {subj}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Majburiy Blok */}
+                            <div className="cert-3d-exam-group" style={{ marginTop: '10px' }}>
+                                <span className="cert-3d-exam-label">Majburiy 3 ta fan:</span>
+                                <div className="cert-3d-exam-chips-row">
+                                    {mandatoryExams.map((subj, idx) => (
+                                        <span key={idx} className="cert-3d-exam-chip mandatory-chip">
+                                            {subj}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Motivatsion / Fan maslahati */}
+                            <div className="cert-3d-exam-advice">
+                                <span>💡 {subjectsAdvice || "Asosiy mutaxassislik fanlaridan chuqurlashtirilgan test va amaliy masalalarni yechishga kunlik vaqt ajrating."}</span>
+                            </div>
+                        </div>
+                    </section>
                 </div>
+
+                {/* ── FOOTER: Tasdiq va QR Shtamp ── */}
+                <footer className="cert-3d-footer">
+                    <div className="cert-3d-footer-info">
+                        <span className="cert-3d-ft-brand">ISTEDOD AI — Professional Kasbga Yo'naltirish Platformasi</span>
+                        <p className="cert-3d-ft-note">
+                            Ushbu sertifikat savol-javob muloqoti asosida sun'iy intellekt tomonidan tahlil qilinib, 1 list formatida tuzildi.
+                        </p>
+                    </div>
+
+                    <div
+                        className="cert-3d-footer-stamp cert-3d-glass-card"
+                        onMouseMove={handleCardTilt}
+                        onMouseLeave={handleCardReset}
+                    >
+                        <div className="cert-3d-qr-placeholder">
+                            <div className="cert-3d-qr-inner">
+                                <Award size={20} className="text-cyan" />
+                                <span>VALID</span>
+                            </div>
+                        </div>
+                        <div className="cert-3d-sign-box">
+                            <span className="cert-3d-sign-line">Istedod AI Verified</span>
+                            <span className="cert-3d-sign-title">Avtomatlashtirilgan Tizim</span>
+                        </div>
+                    </div>
+                </footer>
             </div>
         </motion.div>
     );

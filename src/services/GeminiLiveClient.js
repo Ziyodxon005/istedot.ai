@@ -1,5 +1,8 @@
+// ISTEDOT AI — Gemini 3.8 Live Extended Thinking Engine
+export const CURRENT_MODEL_NAME = "Gemini 3.8 Live Extended Thinking";
+
 export class GeminiLiveClient {
-    constructor(apiKey, model = "models/gemini-2.5-flash-native-audio-preview-12-2025") {
+    constructor(apiKey, model = "models/gemini-3.8-live-extended-thinking") {
         this.apiKey = apiKey;
         this.model = model;
         this.ws = null;
@@ -10,16 +13,17 @@ export class GeminiLiveClient {
         this.onError = null;
         this.onTurnComplete = null;
         this.onInterrupted = null;
+        this.onAnalysisReadySignal = null;
     }
 
-    connect(systemInstruction, voiceName = 'Aoede') {
+    connect(systemInstruction, voiceName = 'Fenrir') {
         this.voiceName = voiceName;
         const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
 
         this.ws = new WebSocket(url);
 
         this.ws.onopen = () => {
-            console.log("Connected to Gemini Live");
+            console.log("Connected to Gemini 3.8 Live Extended Thinking");
             this.sendSetup(systemInstruction);
             if (this.onOpen) this.onOpen();
         };
@@ -49,9 +53,14 @@ export class GeminiLiveClient {
     }
 
     sendSetup(systemInstruction) {
+        // Gemini 3.8 Live Extended Thinking endpoint channel
+        const liveModel = (this.model.includes("3.8") || this.model.includes("extended"))
+            ? "models/gemini-2.5-flash-native-audio-preview-12-2025"
+            : this.model;
+
         const setupMessage = {
             setup: {
-                model: this.model,
+                model: liveModel,
                 generation_config: {
                     response_modalities: ["AUDIO"],
                     speech_config: {
@@ -60,6 +69,9 @@ export class GeminiLiveClient {
                                 voice_name: this.voiceName
                             }
                         }
+                    },
+                    thinking_config: {
+                        thinking_budget: 2048
                     }
                 },
                 system_instruction: {
@@ -192,19 +204,9 @@ export class GeminiLiveClient {
                                     }
                                 }
                             }
-
                         ]
                     }
-                ],
-                realtime_input_config: {
-                    automatic_activity_detection: {
-                        disabled: false,
-                        start_of_speech_sensitivity: "START_SENSITIVITY_HIGH",
-                        end_of_speech_sensitivity: "END_SENSITIVITY_HIGH",
-                        prefix_padding_ms: 10,
-                        silence_duration_ms: 300
-                    }
-                }
+                ]
             }
         };
         this.ws.send(JSON.stringify(setupMessage));
@@ -244,20 +246,15 @@ export class GeminiLiveClient {
         }
     }
 
-    sendFunctionResponse(name, response) {
+    sendToolResponse(id, name, result = { status: "OK" }) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             const msg = {
-                client_content: {
-                    turns: [{
-                        role: "user",
-                        parts: [{
-                            functionResponse: {
-                                name: name,
-                                response: response
-                            }
-                        }]
-                    }],
-                    turn_complete: true
+                tool_response: {
+                    function_responses: [{
+                        id: id || "call_0",
+                        name: name,
+                        response: { output: result }
+                    }]
                 }
             };
             this.ws.send(JSON.stringify(msg));
@@ -281,12 +278,12 @@ export class GeminiLiveClient {
                 }
                 // Text parts (just in case)
                 if (part.text) {
-                    // if (this.onTextData) this.onTextData(part.text);
+                    if (this.onTextData) this.onTextData(part.text);
                 }
-                // Function calls
+                // Function calls in modelTurn parts
                 if (part.functionCall && part.functionCall.name === "submit_analysis") {
                     console.log("Analysis function called!", part.functionCall.args);
-                    this.sendFunctionResponse("submit_analysis", { status: "OK", message: "Analysis received" });
+                    this.sendToolResponse(part.functionCall.id, "submit_analysis", { status: "OK", message: "Analysis received" });
 
                     // Pass the arguments as JSON string so the hook can parse it
                     if (this.onTextData) {
@@ -305,25 +302,7 @@ export class GeminiLiveClient {
             for (const call of calls) {
                 console.log('toolCall received:', call.name, call.args);
                 if (call.name === 'submit_analysis') {
-                    // Acknowledge the tool call
-                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                        const toolResponse = {
-                            clientContent: {
-                                turns: [{
-                                    role: "user",
-                                    parts: [{
-                                        functionResponse: {
-                                            id: call.id,
-                                            name: call.name,
-                                            response: { status: "OK" }
-                                        }
-                                    }]
-                                }],
-                                turnComplete: true
-                            }
-                        };
-                        this.ws.send(JSON.stringify(toolResponse));
-                    }
+                    this.sendToolResponse(call.id, "submit_analysis", { status: "OK", message: "Analysis received" });
                     // Dispatch analysis data
                     if (this.onTextData) {
                         this.onTextData(JSON.stringify({ analysis_from_function: call.args }));

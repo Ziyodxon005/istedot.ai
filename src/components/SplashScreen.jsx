@@ -12,6 +12,11 @@ const SplashScreen = ({ onComplete, onViewSaved }) => {
         setSavedCount(certs.length);
     }, []);
 
+    const isFirstLoad = !window.__splashVisited;
+    useEffect(() => {
+        window.__splashVisited = true;
+    }, []);
+
     const handleStart = () => {
         if (started) return;
         setStarted(true);
@@ -29,7 +34,7 @@ const SplashScreen = ({ onComplete, onViewSaved }) => {
             console.warn('AudioContext prewarm failed:', e);
         }
 
-        setTimeout(() => onComplete(), 500);
+        setTimeout(() => onComplete(), 120);
     };
 
     return (
@@ -38,16 +43,16 @@ const SplashScreen = ({ onComplete, onViewSaved }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.7 }}
+            transition={{ duration: 0.2 }}
         >
             <div className="splash-grid" />
 
             <div className="splash-content">
                 {/* Sphere */}
                 <motion.div
-                    initial={{ scale: 0.3, opacity: 0 }}
+                    initial={isFirstLoad ? { scale: 0.7, opacity: 0 } : false}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                     className="splash-sphere-wrap"
                 >
                     <SphereVisualizer volume={0} isActive={false} isSpeaking={false} size={220} />
@@ -55,9 +60,9 @@ const SplashScreen = ({ onComplete, onViewSaved }) => {
 
                 {/* Title */}
                 <motion.div
-                    initial={{ opacity: 0, y: 30 }}
+                    initial={isFirstLoad ? { opacity: 0, y: 15 } : false}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7, duration: 0.9 }}
+                    transition={{ delay: isFirstLoad ? 0.2 : 0, duration: 0.4 }}
                     className="splash-title-block"
                 >
                     <h1 className="splash-brand">ISTEDOD<span className="splash-brand-ai"> AI</span></h1>
@@ -67,9 +72,9 @@ const SplashScreen = ({ onComplete, onViewSaved }) => {
                 {/* Subtitle */}
                 <motion.p
                     className="splash-sub"
-                    initial={{ opacity: 0 }}
+                    initial={isFirstLoad ? { opacity: 0 } : false}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 1.2, duration: 0.8 }}
+                    transition={{ delay: isFirstLoad ? 0.3 : 0, duration: 0.35 }}
                 >
                     Sun'iy intellekt bilan kelajagingizni birga kashf eting
                 </motion.p>
@@ -77,9 +82,9 @@ const SplashScreen = ({ onComplete, onViewSaved }) => {
                 {/* Info Cards */}
                 <motion.div
                     className="splash-info-grid"
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={isFirstLoad ? { opacity: 0, y: 15 } : false}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.5, duration: 0.8 }}
+                    transition={{ delay: isFirstLoad ? 0.4 : 0, duration: 0.4 }}
                 >
                     <div className="splash-info-card">
                         <div className="splash-info-icon">🎙️</div>
@@ -101,16 +106,16 @@ const SplashScreen = ({ onComplete, onViewSaved }) => {
                 {/* Buttons */}
                 <motion.div
                     className="splash-buttons-row"
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={isFirstLoad ? { opacity: 0, y: 15 } : false}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.8, duration: 0.7 }}
+                    transition={{ delay: isFirstLoad ? 0.45 : 0, duration: 0.35 }}
                 >
                     {/* START BUTTON */}
                     <motion.button
                         className="splash-start-btn"
                         onClick={handleStart}
                         disabled={started}
-                        whileHover={{ scale: 1.06 }}
+                        whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.96 }}
                     >
                         <AnimatePresence mode="wait">

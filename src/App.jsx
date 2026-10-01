@@ -19,7 +19,13 @@ function App() {
 
     const handleAnalysisReady = useCallback((data) => {
         setAnalysisData(data);
-        setCurrentPage('analyzing');
+        setCurrentPage((prev) => {
+            // Agar foydalanuvchi allaqachon sertifikatni ko'rayotgan bo'lsa, qayta analyzing ga o'tmasin!
+            if (prev === 'certificate' || prev === 'viewing_saved_cert' || prev === 'analyzing') {
+                return prev;
+            }
+            return 'analyzing';
+        });
     }, []);
 
     const handleAnalysisComplete = () => {

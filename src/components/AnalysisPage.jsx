@@ -17,7 +17,7 @@ const AnalysisPage = ({ onComplete }) => {
     const [progress, setProgress] = useState(0);
 
     useEffect(() => {
-        const duration = 15000;
+        const duration = 4500;
         const stepDuration = duration / steps.length;
 
         const stepInterval = setInterval(() => {
@@ -55,6 +55,7 @@ const AnalysisPage = ({ onComplete }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
         >
             {/* Background orbs */}
             <div className="analysis-orb orb-1" />

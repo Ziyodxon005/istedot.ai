@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { GeminiLiveClient } from '../services/GeminiLiveClient';
 import { AudioStreamer } from '../services/AudioStreamer';
+import { generateAnalysisWithGeminiThinking } from '../services/analysisService';
 
 export function useGeminiLive() {
     const [isLive, setIsLive] = useState(false);
+    const [isReconnecting, setIsReconnecting] = useState(false);
     const [volume, setVolume] = useState(0);
     const [isVisionEnabled, setIsVisionEnabled] = useState(false);
     const [isMicMuted, setIsMicMuted] = useState(false);
@@ -12,9 +14,11 @@ export function useGeminiLive() {
     const [isAISpeaking, setIsAISpeaking] = useState(false);
     const [analysisData, setAnalysisData] = useState(null);
     const [turnCount, setTurnCount] = useState(0);
+    const [isReadyToFinish, setIsReadyToFinish] = useState(false);
 
     const clientRef = useRef(null);
     const audioStreamerRef = useRef(new AudioStreamer());
+    const speechRecRef = useRef(null);
     const videoRef = useRef(null);
     const visionIntervalRef = useRef(null);
     const visionTimeoutRef = useRef(null);
@@ -31,6 +35,24 @@ export function useGeminiLive() {
     const pendingReconnectRef = useRef(null);
     const textBufferRef = useRef('');
     const onAnalysisReadyRef = useRef(null);
+    const conversationHistoryRef = useRef([]);
+    const fallbackTimerRef = useRef(null);
+    const analysisSentRef = useRef(false);
+
+    // Guaranteed single dispatch of analysis data
+    const dispatchAnalysis = useCallback((data) => {
+        if (!data || analysisSentRef.current) return;
+        analysisSentRef.current = true;
+        if (fallbackTimerRef.current) {
+            clearTimeout(fallbackTimerRef.current);
+            fallbackTimerRef.current = null;
+        }
+        console.log('Dispatching final analysis data (once):', data);
+        setAnalysisData(data);
+        if (onAnalysisReadyRef.current) {
+            onAnalysisReadyRef.current(data);
+        }
+    }, []);
 
     useEffect(() => {
         let interval;
@@ -69,11 +91,7 @@ export function useGeminiLive() {
             const jsonStr = text.slice(startIdx + startMarker.length, endIdx).trim();
             try {
                 const parsed = JSON.parse(jsonStr);
-                console.log('Analysis data parsed successfully!', parsed);
-                setAnalysisData(parsed);
-                if (onAnalysisReadyRef.current) {
-                    onAnalysisReadyRef.current(parsed);
-                }
+                dispatchAnalysis(parsed);
                 return true;
             } catch (e) {
                 console.error('Failed to parse analysis JSON:', e);
@@ -81,9 +99,9 @@ export function useGeminiLive() {
             }
         }
         return false;
-    }, []);
+    }, [dispatchAnalysis]);
 
-    const connect = useCallback(async (initialApiKey, systemInstruction, voiceName = 'Aoede', isRetry = false, onAnalysisReady = null) => {
+    const connect = useCallback(async (initialApiKey, systemInstruction, voiceName = 'Fenrir', isRetry = false, onAnalysisReady = null) => {
         // Prevent double-connect (React StrictMode or rapid calls)
         if (isConnectingRef.current && !isRetry) {
             console.log('connect() skipped — already connecting');
@@ -143,10 +161,7 @@ export function useGeminiLive() {
                     const data = JSON.parse(text);
                     if (data && data.analysis_from_function) {
                         console.log('Analysis data received via function!', data.analysis_from_function);
-                        setAnalysisData(data.analysis_from_function);
-                        if (onAnalysisReadyRef.current) {
-                            onAnalysisReadyRef.current(data.analysis_from_function);
-                        }
+                        dispatchAnalysis(data.analysis_from_function);
                         return;
                     }
                 } catch (e) {
@@ -154,6 +169,12 @@ export function useGeminiLive() {
                     textBufferRef.current += text;
                     tryParseAnalysis(textBufferRef.current);
                 }
+            };
+
+            // AI signals that it has collected enough answers to finish
+            client.onAnalysisReadySignal = (args) => {
+                console.log('AI signaled that answers are sufficient!', args);
+                setIsReadyToFinish(true);
             };
 
             client.onTurnComplete = () => {
@@ -168,6 +189,7 @@ export function useGeminiLive() {
                     setTurnCount(prev => {
                         const newCount = prev + 1;
                         turnCountRef.current = newCount;
+                        if (newCount >= 7) setIsReadyToFinish(true);
                         return newCount;
                     });
                 }
@@ -180,6 +202,7 @@ export function useGeminiLive() {
                 isAISpeakingRef.current = false;
                 setIsAISpeaking(false);
                 setPersonaState('idle');
+                userSpokeRef.current = true;
                 if (speakingTimeoutRef.current) {
                     clearTimeout(speakingTimeoutRef.current);
                     speakingTimeoutRef.current = null;
@@ -188,6 +211,40 @@ export function useGeminiLive() {
 
             client.onOpen = async () => {
                 setIsLive(true);
+                setIsReconnecting(false);
+
+                // Start local SpeechRecognition in background to capture real dialogue text
+                const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (SpeechRec && !speechRecRef.current) {
+                    try {
+                        const rec = new SpeechRec();
+                        rec.continuous = true;
+                        rec.interimResults = false;
+                        rec.lang = 'uz-UZ';
+                        rec.onresult = (e) => {
+                            for (let i = e.resultIndex; i < e.results.length; ++i) {
+                                if (e.results[i].isFinal) {
+                                    const txt = e.results[i][0].transcript?.trim();
+                                    if (txt) {
+                                        console.log('🎤 Foydalanuvchi nutqi aniqlandi:', txt);
+                                        conversationHistoryRef.current.push({ role: 'user', text: txt });
+                                    }
+                                }
+                            }
+                        };
+                        rec.onerror = (e) => console.log('SpeechRec info:', e.error);
+                        rec.onend = () => {
+                            if (!isEndingRef.current && speechRecRef.current) {
+                                try { rec.start(); } catch (err) { }
+                            }
+                        };
+                        speechRecRef.current = rec;
+                        rec.start();
+                    } catch (err) {
+                        console.log('SpeechRec init note:', err);
+                    }
+                }
+
                 try {
                     await audioStreamerRef.current.startRecording((base64Input) => {
                         if (!isMicMutedRef.current) {
@@ -195,6 +252,9 @@ export function useGeminiLive() {
                             // Mark that user is actively speaking (real Q&A)
                             if (!isAISpeakingRef.current) {
                                 userSpokeRef.current = true;
+                                if (conversationHistoryRef.current.length === 0 || conversationHistoryRef.current[conversationHistoryRef.current.length - 1].role !== 'user') {
+                                    conversationHistoryRef.current.push({ role: 'user', text: "O'quvchi javob berdi" });
+                                }
                             }
                         }
                     });
@@ -207,20 +267,16 @@ export function useGeminiLive() {
                             client.sendTextMessage("Boshlang");
                         }, 300);
                     } else {
-                        // Reconnection scenario
+                        // Reconnection scenario - Restore context so conversation NEVER starts over
                         setTimeout(() => {
                             if (isEndingRef.current) {
-                                // We were just waiting for the analysis JSON when the connection dropped!
-                                const msg = "TIZIM BUYRUG'I: Suhbat yakunlangan edi, ammo tarmoq uzilishi sababli sizning oxirgi xulosangiz yetib kelmadi. ZUDLIK BILAN, hech qanday ovozli gaplarsiz, 'submit_analysis' funksiyasini chaqiring yoka barcha JSON ma'lumotlarni [ANALYSIS_DATA] va [/ANALYSIS_DATA] teglari orasida matn sifatida yuboring. Gapirmang!";
+                                // We were waiting for the analysis JSON when the connection dropped!
+                                const msg = "TIZIM BUYRUG'I: Suhbat yakunlangan edi. ZUDLIK BILAN, hech qanday ovozli gaplarsiz, 'submit_analysis' funksiyasini barcha ma'lumotlar bilan chaqiring. Gapirmang!";
                                 client.sendTextMessage(msg);
                             } else {
                                 const turns = turnCountRef.current;
-                                let msg = "Texnik sabablarga ko'ra aloqa uzilib qoldi. Biz kasb tanlash bo'yicha suhbatlashayotgan edik.";
-                                if (turns >= 5) {
-                                    msg += ` Diqqat: Biz hozirgacha suhbatda ${turns} ta savol-javob qildik. Suhbat deyarli yakuniga yetgan. ZINXOR boshidan boshlamang! To'g'ridan-to'g'ri foydalanuvchiga 'Aloqa uzilib qoldi, uzr. Xo'sh, oxirgi gaplashgan mavzumizdan kelib chiqib, sizga oxirgi savolimni bersam...' deb yakunlovchi maxsus savolingizni bering va tezroq [ANALYSIS_DATA] orqali tahlilni yakunlashga harakat qiling.`;
-                                } else {
-                                    msg += ` Iltimos, suhbatni qolgan joyidan davom ettiring va foydalanuvchiga 'Aloqa biroz uzilib qoldi, uzr. Xo'sh, oxirgi marta nima haqida gaplashayotgan edik?' deb murojaat qiling. Boshidan salomlashmang.`;
-                                }
+                                const recentContext = conversationHistoryRef.current.slice(-3).map(c => c.text).join(', ');
+                                const msg = `DIQQAT TIZIM: Tarmoq uzilishi sababli qayta ulandingiz. Suhbat BOSHIDAN BOSHLANMASIN! Biz kasbiy yo'nalish bo'yicha suhbatlashayotgan edik va hozirgacha ${turns} ta savol-javob o'tkazdik. Kontekst: ${recentContext || 'kasb tanlash'}. Foydalanuvchiga faqat: "Aloqa tiklandi, davom etamiz" deb, to'xtagan joyimizdan navbatdagi savolingizni bering! Hech qanday salomlashish yoki boshidan boshlash bo'lmasin!`;
                                 client.sendTextMessage(msg);
                             }
                         }, 300);
@@ -259,11 +315,13 @@ export function useGeminiLive() {
                 const isIntentional = code === 1000 || code === 1001;
 
                 if (isRateLimit) {
+                    setIsReconnecting(true);
                     const { systemInstruction, voiceName } = pendingReconnectRef.current;
                     console.log(`Rate limit hit on key index ${currentKeyIndexRef.current} — switching to next API key`);
                     setTimeout(() => connect(null, systemInstruction, voiceName, true), 1000);
                 } else if (!isIntentional) {
                     // Covers: 1011 timeout, 1006 abnormal close, network errors, any unexpected close
+                    setIsReconnecting(true);
                     const { systemInstruction, voiceName } = pendingReconnectRef.current;
                     if (isTimeout) {
                         console.log('Session timeout (1011) — auto-reconnecting silently...');
@@ -272,7 +330,7 @@ export function useGeminiLive() {
                     }
                     greetingSentRef.current = true; // Continue, don't restart greeting
                     isConnectingRef.current = false;
-                    setTimeout(() => connect(null, systemInstruction, voiceName, false), 1500);
+                    setTimeout(() => connect(null, systemInstruction, voiceName, false), 1200);
                 }
             };
 
@@ -303,6 +361,11 @@ export function useGeminiLive() {
 
         audioStreamerRef.current?.stop();
         stopVision();
+
+        if (speechRecRef.current) {
+            try { speechRecRef.current.stop(); } catch (e) { }
+            speechRecRef.current = null;
+        }
 
         if (speakingTimeoutRef.current) {
             clearTimeout(speakingTimeoutRef.current);
@@ -372,7 +435,7 @@ export function useGeminiLive() {
         }
     }, []);
 
-    // Immediately stop all AI audio playback (for finish button)
+    // Immediately stop all AI audio playback
     const stopAudio = useCallback(() => {
         audioStreamerRef.current?.clearAudioQueue();
         isAISpeakingRef.current = false;
@@ -384,12 +447,43 @@ export function useGeminiLive() {
         }
     }, []);
 
+    const triggerAnalysis = useCallback(async () => {
+        isEndingRef.current = true;
+        stopAudio();
+        if (!isMicMutedRef.current) {
+            isMicMutedRef.current = true;
+            setIsMicMuted(true);
+            audioStreamerRef.current?.pauseRecording();
+        }
+
+        // 1. WebSocket ga buyruq yuboramiz
+        const finishPrompt = "TIZIM BUYRUG'I: Suhbat foydalanuvchi tomonidan yakunlandi. Hech qanday ovozli gaplarsiz, 'submit_analysis' funksiyasini barcha ma'lumotlar bilan HOZIROQ chaqiring.";
+        if (clientRef.current && isLive) {
+            clientRef.current.sendTextMessage(finishPrompt);
+        }
+
+        // 2. Qat'iy zaxira taymeri: agar 12 soniyada live tahlil kelmasa, darhol Gemini 3.8 Extended Thinking REST orqali generatsiya qiladi!
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = setTimeout(async () => {
+            if (analysisSentRef.current) return;
+            console.log("Live tahlil kutish vaqti bo'yicha zaxira: Gemini 3.8 Extended Thinking tahlili generatsiya qilinmoqda...");
+            try {
+                const generated = await generateAnalysisWithGeminiThinking(conversationHistoryRef.current);
+                if (generated) {
+                    dispatchAnalysis(generated);
+                }
+            } catch (err) {
+                console.error("Analysis generation error:", err);
+            }
+        }, 12000);
+    }, [isLive, stopAudio, dispatchAnalysis]);
+
     return {
-        isLive, volume, connect, disconnect, sendText, stopAudio,
+        isLive, isReconnecting, volume, connect, disconnect, sendText, stopAudio, triggerAnalysis,
         videoRef, isVisionEnabled, toggleVision,
         isMicMuted, toggleMic,
         permissionError, personaState, isAISpeaking,
-        analysisData, turnCount,
+        analysisData, turnCount, isReadyToFinish,
         setEndingState: (state) => { isEndingRef.current = state; }
     };
 }
