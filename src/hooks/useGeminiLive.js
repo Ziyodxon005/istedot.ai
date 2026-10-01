@@ -462,7 +462,7 @@ export function useGeminiLive() {
             clientRef.current.sendTextMessage(finishPrompt);
         }
 
-        // 2. Qat'iy tezkor zaxira taymeri: agar 4 soniyada live tahlil kelmasa, darhol Gemini 3.8 Extended Thinking REST orqali generatsiya qiladi!
+        // 2. Qat'iy zaxira taymeri: Gemini Live'ga shoshilmasdan chuqur fikrlash va tahlil tuzish uchun to'liq vaqt (14 soniya) beriladi
         if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
         fallbackTimerRef.current = setTimeout(async () => {
             if (analysisSentRef.current) return;
@@ -480,7 +480,7 @@ export function useGeminiLive() {
                 const fallback = buildFallbackAnalysis(conversationHistoryRef.current.map(m => m.text).join(' '));
                 dispatchAnalysis(fallback);
             }
-        }, 4000);
+        }, 14000);
     }, [isLive, stopAudio, dispatchAnalysis]);
 
     return {

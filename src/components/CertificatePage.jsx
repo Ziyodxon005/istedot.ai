@@ -91,7 +91,7 @@ function resolveUniversityInfo(u) {
     // 2. Agar bazada bo'lmasa, AI taqdim etgan domen mavjud bo'lsa uni tozalash
     if (rawSite && typeof rawSite === 'string' && rawSite.trim()) {
         let clean = rawSite.trim().toLowerCase().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-        
+
         // AI keng tarqalgan xato qiladigan domenlarni to'g'rilash
         if (clean.includes('tatu.uz')) clean = 'tuit.uz';
         if (clean.includes('westminster.uz')) clean = 'wiut.uz';
@@ -244,7 +244,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
         const y = e.clientY - rect.top;
         const centerX = rect.width / 2;
         const centerY = rect.height / 2;
-        
+
         // Burilish burchagi (-10deg dan +10deg gacha)
         const rotateX = ((y - centerY) / centerY) * -10;
         const rotateY = ((x - centerX) / centerX) * 10;
@@ -309,7 +309,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
 
             // Lossless PNG for razor-sharp text and graphics
             const imgData = canvas.toDataURL('image/png');
-            
+
             // Qat'iy 1 sahifa qilib kiritish
             pdf.addImage(imgData, 'PNG', 0, 0, A4_WIDTH_MM, A4_HEIGHT_MM, undefined, 'SLOW');
             pdf.save(`ISTEDOD-AI-Sertifikat-${dateStr.replace(/\./g, '-')}.pdf`);
@@ -617,7 +617,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                     <div className="cert-3d-footer-info">
                         <span className="cert-3d-ft-brand">ISTEDOD AI — Professional Kasbga Yo'naltirish Platformasi</span>
                         <p className="cert-3d-ft-note">
-                            Ushbu sertifikat savol-javob muloqoti asosida sun'iy intellekt tomonidan tahlil qilinib,shu xulosalar asosida tuzildi.
+                            Ushbu sertifikat savol-javob muloqoti asosida sun'iy intellekt tomonidan tahlil qilindi.
                         </p>
                     </div>
 
@@ -633,7 +633,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                             </div>
                         </div>
                         <div className="cert-3d-sign-box">
-                            <span className="cert-3d-sign-line">Istedod AI Tasdiqlangan</span>
+                            <span className="cert-3d-sign-line">Istedod AI</span>
                             <span className="cert-3d-sign-title">Avtomatlashtirilgan Tizim</span>
                         </div>
                     </div>
