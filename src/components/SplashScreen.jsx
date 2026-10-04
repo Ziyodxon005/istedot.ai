@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import SphereVisualizer from './SphereVisualizer';
 import { getSavedCertificates } from '../utils/certificateStore';
+import { Mic, ClipboardList, BookOpen } from 'lucide-react';
 
-const SplashScreen = ({ onComplete, onViewSaved }) => {
+const SplashScreen = ({ onComplete, onViewSaved, onStartTest }) => {
     const [started, setStarted] = useState(false);
     const [savedCount, setSavedCount] = useState(0);
 
@@ -92,57 +93,74 @@ const SplashScreen = ({ onComplete, onViewSaved }) => {
                         <p className="splash-info-desc">Mikrofon orqali xuddi haqiqiy psixolog bilan gaplashgandek erkin suhbat quring.</p>
                     </div>
                     <div className="splash-info-card">
-                        <div className="splash-info-icon">🛑</div>
-                        <h4 className="splash-info-title">Tahlilni Yakunlash</h4>
-                        <p className="splash-info-desc">Suhbat yetarli bo'lgach, ekranda paydo bo'ladigan tugmani bosib sertifikatni oling.</p>
+                        <div className="splash-info-icon">📝</div>
+                        <h4 className="splash-info-title">Psixologik Test</h4>
+                        <p className="splash-info-desc">10 ta AI tomonidan yaratilgan savollarga javob berib, qobiliyatingizni aniqlang.</p>
                     </div>
                     <div className="splash-info-card">
-                        <div className="splash-info-icon">🔄</div>
-                        <h4 className="splash-info-title">Qayta Boshlash</h4>
-                        <p className="splash-info-desc">Istalgan vaqtda suhbatni to'xtatib, boshidan qayta boshlashingiz mumkin.</p>
+                        <div className="splash-info-icon">📜</div>
+                        <h4 className="splash-info-title">Rasmiy Sertifikat</h4>
+                        <p className="splash-info-desc">Suhbat yoki test asosida shaxsiy sertifikatingizni oling va yuklab oling.</p>
                     </div>
                 </motion.div>
 
-                {/* Buttons */}
+                {/* MAIN ACTION BUTTONS - 2 ta asosiy tugma */}
                 <motion.div
-                    className="splash-buttons-row"
+                    className="splash-main-actions"
                     initial={isFirstLoad ? { opacity: 0, y: 15 } : false}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: isFirstLoad ? 0.45 : 0, duration: 0.35 }}
                 >
-                    {/* START BUTTON */}
+                    {/* SUHBAT BOSHLASH */}
                     <motion.button
-                        className="splash-start-btn"
+                        className="splash-action-card action-conversation"
                         onClick={handleStart}
                         disabled={started}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.96 }}
+                        whileHover={{ scale: 1.03, y: -4 }}
+                        whileTap={{ scale: 0.97 }}
                     >
-                        <AnimatePresence mode="wait">
-                            {started ? (
-                                <motion.span
-                                    key="loading"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="splash-btn-loading"
-                                >
-                                    <span className="splash-btn-dot" />
-                                    <span className="splash-btn-dot" />
-                                    <span className="splash-btn-dot" />
-                                </motion.span>
-                            ) : (
-                                <motion.span
-                                    key="label"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                >
-                                    ✦ Suhbatni Boshlash
-                                </motion.span>
-                            )}
-                        </AnimatePresence>
+                        <div className="splash-action-icon-wrap">
+                            <Mic size={28} />
+                        </div>
+                        <div className="splash-action-text">
+                            <h3>Suhbatni Boshlash</h3>
+                            <p>Ovozli AI psixolog bilan gaplashing</p>
+                        </div>
+                        <div className="splash-action-arrow">→</div>
+                        {started && (
+                            <div className="splash-action-loading">
+                                <span className="splash-btn-dot" />
+                                <span className="splash-btn-dot" />
+                                <span className="splash-btn-dot" />
+                            </div>
+                        )}
                     </motion.button>
 
-                    {/* SAVED CERTS BUTTON — only if certs exist */}
+                    {/* TEST BOSHLASH */}
+                    <motion.button
+                        className="splash-action-card action-test"
+                        onClick={onStartTest}
+                        whileHover={{ scale: 1.03, y: -4 }}
+                        whileTap={{ scale: 0.97 }}
+                    >
+                        <div className="splash-action-icon-wrap test-icon">
+                            <ClipboardList size={28} />
+                        </div>
+                        <div className="splash-action-text">
+                            <h3>Test Bo'limi</h3>
+                            <p>10 ta savol — variantli test</p>
+                        </div>
+                        <div className="splash-action-arrow">→</div>
+                    </motion.button>
+                </motion.div>
+
+                {/* SAVED CERTS BUTTON */}
+                <motion.div
+                    className="splash-buttons-row"
+                    initial={isFirstLoad ? { opacity: 0, y: 15 } : false}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: isFirstLoad ? 0.5 : 0, duration: 0.35 }}
+                >
                     <AnimatePresence>
                         {savedCount > 0 && (
                             <motion.button

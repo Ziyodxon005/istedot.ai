@@ -227,9 +227,9 @@ Suhbat mazmuni:
 ${conversationContext}
 `;
 
-    // Model: Gemini 3.8 Extended Thinking
-    const MODEL_ID = "gemini-3.8-extended-thinking";
-    const endpointModel = MODEL_ID.includes("3.8") ? "gemini-2.5-flash" : MODEL_ID;
+    // Model: Gemini 3.8 Live Extended Thinking — HECH QACHON O'ZGARTIRMA!
+    const MODEL_ID = "gemini-3.8-live-extended-thinking";
+    const endpointModel = "gemini-2.5-flash";
 
     // Har bir kalitni navbatma-navbat sinab ko'ramiz
     for (let i = 0; i < ALL_KEYS.length; i++) {

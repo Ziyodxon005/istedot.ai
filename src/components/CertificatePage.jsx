@@ -234,6 +234,11 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
 
     const subjectsAdvice = typeof data.subjectsAdvice === 'string' ? data.subjectsAdvice : '';
 
+    // Test yoki suhbat asosida ekanligini aniqlash
+    const isTestMode = data._testMode === true;
+    const testUserInfo = data._userInfo || {};
+    const certTypeLabel = isTestMode ? '📝 TEST ASOSIDA' : '🎙️ SUHBAT ASOSIDA';
+
     // Tez va tabiiy 3D tilt interaktivligi (har bir card uchun)
     const handleCardTilt = (e) => {
         const card = e.currentTarget;
@@ -279,48 +284,68 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
         const originalMaxWidth = el.style.maxWidth;
         const originalTransform = el.style.transform;
 
-        try {
-            // A4 single page render: 210mm x 297mm
+        const generatePDF = async (scale) => {
             const A4_WIDTH_MM = 210;
             const A4_HEIGHT_MM = 297;
             const RENDER_WIDTH_PX = 960;
 
-            el.style.width = `${RENDER_WIDTH_PX}px`;
-            el.style.maxWidth = 'none';
-            el.style.transform = 'none';
-            el.classList.add('pdf-render-mode');
+            // Klonlash — off-screen containerda render qilish (0-width xatoligini hal qiladi)
+            const clone = el.cloneNode(true);
+            clone.style.position = 'absolute';
+            clone.style.left = '-9999px';
+            clone.style.top = '0';
+            clone.style.width = `${RENDER_WIDTH_PX}px`;
+            clone.style.maxWidth = 'none';
+            clone.style.minWidth = `${RENDER_WIDTH_PX}px`;
+            clone.style.transform = 'none';
+            clone.style.opacity = '1';
+            clone.style.visibility = 'visible';
+            clone.style.display = 'block';
+            clone.classList.add('pdf-render-mode');
 
-            // 3x Ultra-sharp scale for crystal clear typography and crisp borders
-            const canvas = await html2canvas(el, {
-                scale: 3,
-                useCORS: true,
-                backgroundColor: '#060d1f',
-                scrollX: 0,
-                scrollY: 0,
-                logging: false,
-                windowWidth: RENDER_WIDTH_PX
-            });
+            // Tugmalarni yashirish
+            clone.querySelectorAll('.cert-action-btn').forEach(b => b.style.display = 'none');
 
-            const pdf = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: 'a4',
-            });
+            document.body.appendChild(clone);
+            await new Promise(r => setTimeout(r, 200));
 
-            // Lossless PNG for razor-sharp text and graphics
-            const imgData = canvas.toDataURL('image/png');
+            try {
+                const canvas = await html2canvas(clone, {
+                    scale: scale,
+                    useCORS: true,
+                    backgroundColor: '#060d1f',
+                    scrollX: 0,
+                    scrollY: 0,
+                    logging: false,
+                    width: RENDER_WIDTH_PX,
+                    windowWidth: RENDER_WIDTH_PX
+                });
 
-            // Qat'iy 1 sahifa qilib kiritish
-            pdf.addImage(imgData, 'PNG', 0, 0, A4_WIDTH_MM, A4_HEIGHT_MM, undefined, 'SLOW');
-            pdf.save(`ISTEDOD-AI-Sertifikat-${dateStr.replace(/\./g, '-')}.pdf`);
-        } catch (e) {
-            console.error("PDF generation failed:", e);
-            alert("PDF generatsiya qilishda xatolik yuz berdi. Iltimos qayta urinib ko'ring.");
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4',
+                });
+
+                const imgData = canvas.toDataURL('image/jpeg', 0.92);
+                pdf.addImage(imgData, 'JPEG', 0, 0, A4_WIDTH_MM, A4_HEIGHT_MM, undefined, 'FAST');
+                pdf.save(`ISTEDOD-AI-Sertifikat-${dateStr.replace(/\./g, '-')}.pdf`);
+            } finally {
+                document.body.removeChild(clone);
+            }
+        };
+
+        try {
+            await generatePDF(2);
+        } catch (e1) {
+            console.warn("PDF scale 2 failed, trying scale 1:", e1);
+            try {
+                await generatePDF(1);
+            } catch (e2) {
+                console.error("PDF generation failed:", e2);
+                alert("PDF generatsiya qilishda xatolik yuz berdi. Iltimos qayta urinib ko'ring.");
+            }
         } finally {
-            el.classList.remove('pdf-render-mode');
-            el.style.width = originalWidth;
-            el.style.maxWidth = originalMaxWidth;
-            el.style.transform = originalTransform;
             btns.forEach(b => b.style.opacity = '1');
             setIsDownloading(false);
         }
@@ -389,6 +414,15 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                             <p className="cert-3d-subtitle">
                                 Kasbiy Yo'nalish va Shaxsiy Qobiliyatlar Bo'yicha Rasmiy Sertifikat
                             </p>
+                            <div className="cert-3d-type-badge" data-type={isTestMode ? 'test' : 'conversation'}>
+                                <span>{certTypeLabel}</span>
+                            </div>
+                            {isTestMode && testUserInfo.name && (
+                                <div className="cert-3d-user-info-row">
+                                    <span className="cert-3d-user-name-label">👤 {testUserInfo.name} {testUserInfo.surname}</span>
+                                    {testUserInfo.school && <span className="cert-3d-user-school-label">🏫 {testUserInfo.school}</span>}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -481,7 +515,6 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                                         </div>
                                     </div>
                                     <h3 className="cert-3d-career-name">{name}</h3>
-                                    {desc && <p className="cert-3d-career-desc">{desc}</p>}
                                 </div>
                             );
                         })}
@@ -603,21 +636,33 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                                     ))}
                                 </div>
                             </div>
-
-                            {/* Motivatsion / Fan maslahati */}
-                            <div className="cert-3d-exam-advice">
-                                <span>💡 {subjectsAdvice || "Asosiy mutaxassislik fanlaridan chuqurlashtirilgan test va amaliy masalalarni yechishga kunlik vaqt ajrating."}</span>
-                            </div>
                         </div>
                     </section>
                 </div>
+
+                {/* 5-BO'LIM: MASLAHAT — grid tashqarisida, to'liq kenglik */}
+                <section className="cert-3d-section cert-3d-advice-section">
+                    <div className="cert-3d-section-title">
+                        <span className="cert-3d-sec-icon text-cyan">💡</span>
+                        <h2>Maslahat va Yo'l-yo'riq</h2>
+                    </div>
+                    <div
+                        className="cert-3d-glass-card cert-3d-advice-card"
+                        onMouseMove={handleCardTilt}
+                        onMouseLeave={handleCardReset}
+                    >
+                        <p className="cert-3d-advice-text">
+                            {subjectsAdvice || "Asosiy mutaxassislik fanlaridan chuqurlashtirilgan test va amaliy masalalarni yechishga kunlik vaqt ajrating."}
+                        </p>
+                    </div>
+                </section>
 
                 {/* ── FOOTER: Tasdiq va QR Shtamp ── */}
                 <footer className="cert-3d-footer">
                     <div className="cert-3d-footer-info">
                         <span className="cert-3d-ft-brand">ISTEDOD AI — Professional Kasbga Yo'naltirish Platformasi</span>
                         <p className="cert-3d-ft-note">
-                            Ushbu sertifikat savol-javob muloqoti asosida sun'iy intellekt tomonidan tahlil qilindi.
+                            Ushbu sertifikat {isTestMode ? 'psixologik test natijalari' : 'savol-javob muloqoti'} asosida sun'iy intellekt tomonidan tahlil qilindi.
                         </p>
                     </div>
 
