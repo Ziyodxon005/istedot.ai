@@ -2,7 +2,9 @@ import React, { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { QRCodeSVG } from 'qrcode.react';
 import { saveCertificate, getSavedCertificates } from '../utils/certificateStore';
+import { saveCertToFirebase } from '../services/firebase';
 import istedotLogo from '../assets/logo_istedot.png';
 import { Sparkles, GraduationCap, BookOpen, User, Briefcase, Award, ArrowLeft, Download, CheckCircle2 } from 'lucide-react';
 
@@ -128,6 +130,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
     const certRef = useRef(null);
     const savedRef = useRef(false);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [certQrId, setCertQrId] = useState('');
 
     const now = new Date();
     const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
@@ -144,17 +147,29 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
         return null;
     })();
 
-    // Auto-save to localStorage once on first render
+    // Auto-save to localStorage + Firebase for QR
     useEffect(() => {
-        if (!skipAutoSave && !savedRef.current && data) {
+        if (!savedRef.current && data) {
             savedRef.current = true;
-            try {
-                saveCertificate(data);
-            } catch (err) {
-                console.error("Certificate save failed:", err);
+            // Agar allaqachon QR ID mavjud bo'lsa — qayta generatsiya qilmaymiz
+            if (data._qrId) {
+                setCertQrId(data._qrId);
+            } else {
+                // Yangi QR ID generatsiya qilamiz
+                const qrId = `IST${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
+                setCertQrId(qrId);
+                // Data ichiga _qrId saqlaymiz
+                data._qrId = qrId;
+                // Firebase'ga saqlaymiz
+                saveCertToFirebase(data, qrId).catch(err => console.warn('QR cert save error:', err));
+            }
+            if (!skipAutoSave) {
+                try { saveCertificate(data); } catch (err) { console.error('Certificate save failed:', err); }
             }
         }
     }, [data, skipAutoSave]);
+
+    const certQrUrl = certQrId ? `${window.location.origin}${window.location.pathname}#cert/${certQrId}` : '';
 
     if (!data) {
         return (
@@ -235,8 +250,8 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
     const subjectsAdvice = typeof data.subjectsAdvice === 'string' ? data.subjectsAdvice : '';
 
     // Test yoki suhbat asosida ekanligini aniqlash
-    const isTestMode = data._testMode === true;
     const testUserInfo = data._userInfo || {};
+    const isTestMode = data._testMode === true;
     const certTypeLabel = isTestMode ? '📝 TEST ASOSIDA' : '🎙️ SUHBAT ASOSIDA';
 
     // Tez va tabiiy 3D tilt interaktivligi (har bir card uchun)
@@ -417,10 +432,11 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                             <div className="cert-3d-type-badge" data-type={isTestMode ? 'test' : 'conversation'}>
                                 <span>{certTypeLabel}</span>
                             </div>
-                            {isTestMode && testUserInfo.name && (
+                            {testUserInfo.name && (
                                 <div className="cert-3d-user-info-row">
                                     <span className="cert-3d-user-name-label">👤 {testUserInfo.name} {testUserInfo.surname}</span>
                                     {testUserInfo.school && <span className="cert-3d-user-school-label">🏫 {testUserInfo.school}</span>}
+                                    {testUserInfo.grade && <span className="cert-3d-user-school-label">📚 {testUserInfo.grade}</span>}
                                 </div>
                             )}
                         </div>
@@ -448,7 +464,7 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                 <section className="cert-3d-section cert-3d-user-section">
                     <div className="cert-3d-section-title">
                         <User size={18} className="cert-3d-sec-icon text-cyan" />
-                        <h2>Foydalanuvchi Portreti va Qobiliyatlari</h2>
+                        <h2>{testUserInfo.name ? `${testUserInfo.name} ${testUserInfo.surname || ''}` : 'Foydalanuvchi'} — Portreti va Qobiliyatlari</h2>
                     </div>
 
                     <div
@@ -671,16 +687,37 @@ const CertificatePage = ({ analysisData, onRestart, skipAutoSave = false, custom
                         onMouseMove={handleCardTilt}
                         onMouseLeave={handleCardReset}
                     >
-                        <div className="cert-3d-qr-placeholder">
-                            <div className="cert-3d-qr-inner">
-                                <Award size={20} className="text-cyan" />
-                                <span>VALID</span>
+                        {certQrUrl ? (
+                            <div className="cert-qr-wrap">
+                                <div className="cert-qr-code">
+                                    <QRCodeSVG
+                                        value={certQrUrl}
+                                        size={72}
+                                        bgColor="transparent"
+                                        fgColor="#4db8ff"
+                                        level="M"
+                                        includeMargin={false}
+                                    />
+                                </div>
+                                <div className="cert-3d-sign-box">
+                                    <span className="cert-3d-sign-line">Istedod AI</span>
+                                    <span className="cert-qr-label">📱 QR skan qiling</span>
+                                </div>
                             </div>
-                        </div>
-                        <div className="cert-3d-sign-box">
-                            <span className="cert-3d-sign-line">Istedod AI</span>
-                            <span className="cert-3d-sign-title">Avtomatlashtirilgan Tizim</span>
-                        </div>
+                        ) : (
+                            <>
+                                <div className="cert-3d-qr-placeholder">
+                                    <div className="cert-3d-qr-inner">
+                                        <Award size={20} className="text-cyan" />
+                                        <span>VALID</span>
+                                    </div>
+                                </div>
+                                <div className="cert-3d-sign-box">
+                                    <span className="cert-3d-sign-line">Istedod AI</span>
+                                    <span className="cert-3d-sign-title">Avtomatlashtirilgan Tizim</span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </footer>
             </div>

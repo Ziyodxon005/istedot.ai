@@ -1,20 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getSavedCertificates, deleteCertificate } from '../utils/certificateStore';
+import { getAllResults, getSchools } from '../services/firebase';
 import istedotLogo from '../assets/logo_istedot.png';
-import { Award, Eye, Trash2, Calendar, GraduationCap, ArrowLeft, CheckCircle2, User, Search, Lock } from 'lucide-react';
+import { Award, Eye, Calendar, GraduationCap, ArrowLeft, CheckCircle2, User, Search, Lock, School, PenLine, ChevronDown } from 'lucide-react';
 
 const SavedCertificatesPage = ({ onBack, onViewCert }) => {
-    const [allCerts] = useState(() => getSavedCertificates());
     const [certs, setCerts] = useState([]);
-    const [confirmDelete, setConfirmDelete] = useState(null);
     const [isVerified, setIsVerified] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
     const [verifyName, setVerifyName] = useState('');
     const [verifySurname, setVerifySurname] = useState('');
+    const [verifySchool, setVerifySchool] = useState('');
+    const [verifyGrade, setVerifyGrade] = useState('');
     const [verifyError, setVerifyError] = useState('');
+    const [schoolsList, setSchoolsList] = useState([]);
 
-    // Ism-familya bo'yicha sertifikatlarni filtrlash
-    const handleVerify = () => {
+    useEffect(() => {
+        getSchools().then(list => setSchoolsList(list)).catch(() => {});
+    }, []);
+
+    // Firebase'dan qidirish
+    const handleVerify = async () => {
         const name = verifyName.trim().toLowerCase();
         const surname = verifySurname.trim().toLowerCase();
 
@@ -23,39 +29,53 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
             return;
         }
 
-        // Sertifikatlarni filtrlash — faqat shu foydalanuvchiniki
-        const filtered = allCerts.filter(cert => {
-            const data = cert.data || {};
-            // Test mode — _userInfo mavjud
-            if (data._userInfo) {
-                const certName = (data._userInfo.name || '').trim().toLowerCase();
-                const certSurname = (data._userInfo.surname || '').trim().toLowerCase();
-                return certName === name && certSurname === surname;
-            }
-            // Suhbat mode — summary ichida ismni qidirish
-            const summary = (data.summary || '').toLowerCase();
-            const certSummary = (cert.summary || '').toLowerCase();
-            return summary.includes(name) || certSummary.includes(name);
-        });
-
-        if (filtered.length === 0) {
-            setVerifyError(`"${verifyName} ${verifySurname}" nomida sertifikat topilmadi`);
-            return;
-        }
-
-        setCerts(filtered);
-        setIsVerified(true);
+        setIsLoading(true);
         setVerifyError('');
-    };
 
-    const handleDelete = (id) => {
-        deleteCertificate(id);
-        const remaining = certs.filter(c => c.id !== id);
-        setCerts(remaining);
-        setConfirmDelete(null);
-        if (remaining.length === 0) {
-            setIsVerified(false);
+        try {
+            const allResults = await getAllResults(1000);
+            
+            if (!allResults || allResults.length === 0) {
+                setVerifyError('Hech qanday natija topilmadi');
+                setIsLoading(false);
+                return;
+            }
+
+            const filtered = allResults.filter(r => {
+                const rName = (r.userInfo?.name || '').trim().toLowerCase();
+                const rSurname = (r.userInfo?.surname || '').trim().toLowerCase();
+                
+                // Ism mosligini tekshirish (includes ham qo'llab-quvvatlanadi)
+                const nameMatch = (rName === name || rName.includes(name)) && (rSurname === surname || rSurname.includes(surname));
+                if (!nameMatch) return false;
+
+                // Maktab filtri
+                if (verifySchool) {
+                    const rSchool = (r.userInfo?.school || '').trim().toLowerCase();
+                    if (rSchool !== verifySchool.toLowerCase().trim()) return false;
+                }
+                // Sinf filtri
+                if (verifyGrade) {
+                    const rGrade = (r.userInfo?.grade || r.grade || '').trim();
+                    if (rGrade !== verifyGrade) return false;
+                }
+                // analysisData mavjudligini tekshirish
+                return !!r.analysisData;
+            });
+
+            if (filtered.length === 0) {
+                setVerifyError(`"${verifyName} ${verifySurname}" nomida sertifikat topilmadi`);
+                setIsLoading(false);
+                return;
+            }
+
+            setCerts(filtered);
+            setIsVerified(true);
+        } catch (err) {
+            setVerifyError('Xatolik yuz berdi, qayta urinib ko\'ring');
+            console.error('Search error:', err);
         }
+        setIsLoading(false);
     };
 
     const handleCardTilt = (e) => {
@@ -67,14 +87,13 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
         const centerY = rect.height / 2;
         const rotateX = ((y - centerY) / centerY) * -10;
         const rotateY = ((x - centerX) / centerX) * 10;
-
-        card.style.transition = 'transform 0.05s ease-out, border-color 0.15s ease, box-shadow 0.15s ease';
-        card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-8px) scale3d(1.02, 1.02, 1.02)`;
+        card.style.transition = 'transform 0.05s ease-out';
+        card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-6px) scale3d(1.02, 1.02, 1.02)`;
     };
 
     const handleCardReset = (e) => {
         const card = e.currentTarget;
-        card.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.5s ease, border-color 0.5s ease';
+        card.style.transition = 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)';
         card.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0) scale3d(1, 1, 1)';
     };
 
@@ -134,9 +153,9 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
                         <div className="verify-icon-wrap">
                             <Lock size={28} className="verify-lock-icon" />
                         </div>
-                        <h2 className="verify-title">Sertifikatlaringizni ko'rish</h2>
-                        <p className="verify-subtitle">
-                            Faqat o'zingizning sertifikatlaringizni ko'rish uchun ism va familyangizni kiriting
+                        <h2 className="verify-title" style={{ fontSize: '1.1rem' }}>Sertifikatlaringizni ko'rish</h2>
+                        <p className="verify-subtitle" style={{ fontSize: '0.75rem' }}>
+                            Ma'lumotlaringizni kiriting va sertifikatlaringizni toping
                         </p>
 
                         <div className="verify-form">
@@ -163,6 +182,26 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
                                     onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
                                 />
                             </div>
+                            <div className="verify-input-group">
+                                <label><School size={14} /><span>Maktabingiz</span></label>
+                                <div className="test-select-wrap">
+                                    <select className="test-input test-select" value={verifySchool} onChange={(e) => setVerifySchool(e.target.value)}>
+                                        <option value="">Barcha maktablar</option>
+                                        {schoolsList.map(s => (<option key={s.id} value={s.name}>{s.name}</option>))}
+                                    </select>
+                                    <ChevronDown size={16} className="test-select-arrow" />
+                                </div>
+                            </div>
+                            <div className="verify-input-group">
+                                <label><PenLine size={14} /><span>Sinfingiz</span></label>
+                                <div className="test-select-wrap">
+                                    <select className="test-input test-select" value={verifyGrade} onChange={(e) => setVerifyGrade(e.target.value)}>
+                                        <option value="">Barcha sinflar</option>
+                                        {[1,2,3,4,5,6,7,8,9,10,11].map(g => (<option key={g} value={`${g}-sinf`}>{g}-sinf</option>))}
+                                    </select>
+                                    <ChevronDown size={16} className="test-select-arrow" />
+                                </div>
+                            </div>
 
                             {verifyError && (
                                 <motion.p
@@ -177,12 +216,15 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
                             <motion.button
                                 className="verify-submit-btn"
                                 onClick={handleVerify}
-                                disabled={!verifyName.trim() || !verifySurname.trim()}
+                                disabled={!verifyName.trim() || !verifySurname.trim() || isLoading}
                                 whileHover={{ scale: 1.04 }}
                                 whileTap={{ scale: 0.96 }}
                             >
-                                <Search size={18} />
-                                <span>Sertifikatlarni topish</span>
+                                {isLoading ? (
+                                    <><span className="verify-spinner" /><span>Qidirilmoqda...</span></>
+                                ) : (
+                                    <><Search size={18} /><span>Sertifikatlarni topish</span></>
+                                )}
                             </motion.button>
                         </div>
                     </motion.div>
@@ -211,16 +253,17 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
                     )}
 
                     <div className="saved-certs-grid">
-                        {certs.map((cert, i) => {
-                            const topCareer = cert.topCareer || cert.data?.recommendedCareers?.[0]?.name || cert.data?.recommendedCareers?.[0] || "Kasbiy yo'nalish";
-                            const matchPercent = cert.data?.recommendedCareers?.[0]?.match || "95%";
-                            const uniDir = cert.data?.universityDirections?.[0]?.direction || cert.data?.universityDirections?.[0]?.universities?.[0]?.name || "Yo'nalish";
-                            const isTestBased = cert.data?._testMode === true;
-                            const certTypeLabel = isTestBased ? '📝 Test asosida' : '🎙️ Suhbat asosida';
+                        {certs.map((r, i) => {
+                            const topCareer = r.analysisData?.recommendedCareers?.[0]?.name || r.analysisData?.recommendedCareers?.[0] || "Kasbiy yo'nalish";
+                            const matchPercent = r.analysisData?.recommendedCareers?.[0]?.match || "95%";
+                            const uniDir = r.analysisData?.universityDirections?.[0]?.direction || "Yo'nalish";
+                            const isTestBased = r.type === 'test';
+                            const certTypeLabel = isTestBased ? '📝 Test' : '🎙️ Suhbat';
+                            const dateStr = new Date(r.timestamp).toLocaleDateString('uz');
 
                             return (
                                 <motion.div
-                                    key={cert.id}
+                                    key={r.id || i}
                                     className="saved-cert-3d-card"
                                     initial={{ opacity: 0, y: 25 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -235,52 +278,51 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
                                                 <img src={istedotLogo} alt="ISTEDOD AI" />
                                             </div>
                                             <span className="saved-cert-date-chip">
-                                                <Calendar size={12} />
-                                                {cert.date}
+                                                <Calendar size={11} />
+                                                {dateStr}
                                             </span>
                                         </div>
                                         <div className="saved-cert-card-top-right">
                                             <span className={`saved-cert-type-badge ${isTestBased ? 'type-test' : 'type-conv'}`}>
                                                 {certTypeLabel}
                                             </span>
-                                            <span className="saved-cert-match-tag">
+                                            <span className="saved-cert-match-tag" style={{ fontSize: '0.65rem' }}>
                                                 {matchPercent}
                                             </span>
                                         </div>
                                     </div>
 
                                     <div className="saved-cert-card-body">
-                                        <h3 className="saved-cert-career-title">{topCareer}</h3>
-                                        <p className="saved-cert-card-summary">
-                                            {cert.summary || "Shaxsiy qobiliyatlaringiz tahlil qilindi."}
+                                        <h3 className="saved-cert-career-title" style={{ fontSize: '0.85rem' }}>{topCareer}</h3>
+                                        <p className="saved-cert-card-summary" style={{ fontSize: '0.68rem' }}>
+                                            {(r.analysisData?.summary || "Shaxsiy qobiliyatlaringiz tahlil qilindi.").slice(0, 100)}...
                                         </p>
                                         <div className="saved-cert-uni-row">
-                                            <GraduationCap size={15} className="saved-cert-uni-icon" />
-                                            <span className="saved-cert-uni-text" title={uniDir}>
+                                            <GraduationCap size={13} className="saved-cert-uni-icon" />
+                                            <span className="saved-cert-uni-text" style={{ fontSize: '0.68rem' }} title={uniDir}>
                                                 {uniDir}
                                             </span>
                                         </div>
+                                        {r.userInfo?.grade && (
+                                            <div className="saved-cert-uni-row" style={{ marginTop: '4px' }}>
+                                                <PenLine size={13} className="saved-cert-uni-icon" />
+                                                <span className="saved-cert-uni-text" style={{ fontSize: '0.68rem' }}>
+                                                    {r.userInfo.school} / {r.userInfo.grade}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="saved-cert-card-actions">
                                         <motion.button
                                             className="saved-cert-btn-view"
-                                            onClick={() => onViewCert(cert.data)}
+                                            onClick={() => onViewCert({ ...r.analysisData, _userInfo: r.userInfo, _testMode: r.type === 'test' })}
                                             whileHover={{ scale: 1.03 }}
                                             whileTap={{ scale: 0.97 }}
                                             title="Sertifikatni to'liq ko'rish"
                                         >
-                                            <Eye size={15} />
-                                            <span>Ko'rish va Yuklab olish</span>
-                                        </motion.button>
-                                        <motion.button
-                                            className="saved-cert-btn-del"
-                                            onClick={() => setConfirmDelete(cert.id)}
-                                            whileHover={{ scale: 1.08 }}
-                                            whileTap={{ scale: 0.92 }}
-                                            title="O'chirish"
-                                        >
-                                            <Trash2 size={16} />
+                                            <Eye size={14} />
+                                            <span style={{ fontSize: '0.72rem' }}>Ko'rish va Yuklab olish</span>
                                         </motion.button>
                                     </div>
                                 </motion.div>
@@ -289,38 +331,6 @@ const SavedCertificatesPage = ({ onBack, onViewCert }) => {
                     </div>
                 </>
             )}
-
-            {/* Confirm delete modal */}
-            <AnimatePresence>
-                {confirmDelete && (
-                    <motion.div
-                        className="saved-certs-overlay"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setConfirmDelete(null)}
-                    >
-                        <motion.div
-                            className="saved-certs-modal"
-                            initial={{ scale: 0.88, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0.88, opacity: 0 }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <p className="saved-certs-modal-title">🗑 Sertifikatni o'chirish</p>
-                            <p className="saved-certs-modal-desc">Ushbu sertifikat natijalari o'chiriladi. Ishonchingiz komilmi?</p>
-                            <div className="saved-certs-modal-btns">
-                                <button className="saved-cert-modal-cancel" onClick={() => setConfirmDelete(null)}>
-                                    Bekor qilish
-                                </button>
-                                <button className="saved-cert-modal-confirm" onClick={() => handleDelete(confirmDelete)}>
-                                    Ha, o'chirilsin
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </motion.div>
     );
 };

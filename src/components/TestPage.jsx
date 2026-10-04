@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ArrowRight, User, School, CheckCircle2, PenLine } from 'lucide-react';
+import { ArrowLeft, ArrowRight, User, School, CheckCircle2, PenLine, ChevronDown } from 'lucide-react';
 import { generateFirstQuestion, generateNextQuestion, analyzeTestResults, FALLBACK_QUESTIONS } from '../services/testService';
-import { saveTestResult } from '../services/firebase';
+import { saveTestResult, getSchools } from '../services/firebase';
 import istedotLogo from '../assets/logo_istedot.png';
 
 // 3D tilt effekt (sertifikatdagidek)
@@ -30,7 +30,7 @@ const handleCardReset = (e) => {
 
 const TestPage = ({ onBack, onAnalysisReady }) => {
     const [phase, setPhase] = useState('info');
-    const [userInfo, setUserInfo] = useState({ name: '', surname: '', school: '' });
+    const [userInfo, setUserInfo] = useState({ name: '', surname: '', school: '', grade: '' });
     const [currentQuestion, setCurrentQuestion] = useState(null);
     const [questionHistory, setQuestionHistory] = useState([]);
     const [selectedOption, setSelectedOption] = useState(null);
@@ -42,6 +42,12 @@ const TestPage = ({ onBack, onAnalysisReady }) => {
     const [analyzeProgress, setAnalyzeProgress] = useState(0);
     const questionRef = useRef(null);
     const analysisCalledRef = useRef(false);
+    const [schoolsList, setSchoolsList] = useState([]);
+
+    // Maktablar ro'yxatini yuklash
+    useEffect(() => {
+        getSchools().then(list => setSchoolsList(list)).catch(() => {});
+    }, []);
 
     const TOTAL_QUESTIONS = 10;
 
@@ -183,13 +189,41 @@ const TestPage = ({ onBack, onAnalysisReady }) => {
                             </div>
                             <div className="test-input-group">
                                 <label><School size={14} /><span>Maktabingiz</span></label>
-                                <input type="text" placeholder="Masalan: 25-sonli maktab" value={userInfo.school} onChange={(e) => setUserInfo(prev => ({ ...prev, school: e.target.value }))} className="test-input" />
+                                <div className="test-select-wrap">
+                                    <select
+                                        className="test-input test-select"
+                                        value={userInfo.school}
+                                        onChange={(e) => setUserInfo(prev => ({ ...prev, school: e.target.value }))}
+                                    >
+                                        <option value="">Maktabni tanlang...</option>
+                                        {schoolsList.map(s => (
+                                            <option key={s.id} value={s.name}>{s.name}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown size={16} className="test-select-arrow" />
+                                </div>
+                            </div>
+                            <div className="test-input-group">
+                                <label><PenLine size={14} /><span>Sinfingiz</span></label>
+                                <div className="test-select-wrap">
+                                    <select
+                                        className="test-input test-select"
+                                        value={userInfo.grade}
+                                        onChange={(e) => setUserInfo(prev => ({ ...prev, grade: e.target.value }))}
+                                    >
+                                        <option value="">Sinfni tanlang...</option>
+                                        {[1,2,3,4,5,6,7,8,9,10,11].map(g => (
+                                            <option key={g} value={`${g}-sinf`}>{g}-sinf</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown size={16} className="test-select-arrow" />
+                                </div>
                             </div>
 
                             <motion.button
                                 className="test-start-btn"
                                 onClick={startTest}
-                                disabled={!userInfo.name.trim() || !userInfo.surname.trim() || !userInfo.school.trim()}
+                                disabled={!userInfo.name.trim() || !userInfo.surname.trim() || !userInfo.school.trim() || !userInfo.grade.trim()}
                                 whileHover={{ scale: 1.04 }}
                                 whileTap={{ scale: 0.96 }}
                             >

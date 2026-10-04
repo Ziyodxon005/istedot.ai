@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import SplashScreen from './components/SplashScreen';
 import ConversationPage from './components/ConversationPage';
@@ -6,6 +6,8 @@ import TestPage from './components/TestPage';
 import AnalysisPage from './components/AnalysisPage';
 import CertificatePage from './components/CertificatePage';
 import SavedCertificatesPage from './components/SavedCertificatesPage';
+import AdminLoginPage from './components/AdminLoginPage';
+import AdminDashboard from './components/AdminDashboard';
 import { saveCertificate } from './utils/certificateStore';
 import { saveConversationResult } from './services/firebase';
 import './App.css';
@@ -16,6 +18,10 @@ function App() {
     const [splashKey, setSplashKey] = useState(0);
 
     const [currentPage, setCurrentPage] = useState(() => {
+        // Admin URL tekshirish: #admin
+        if (window.location.hash === '#admin') {
+            return 'admin_login';
+        }
         try {
             const activeRaw = sessionStorage.getItem('current_active_cert');
             if (activeRaw) {
@@ -27,6 +33,31 @@ function App() {
         } catch (e) { }
         return 'splash';
     });
+
+    // URL hash o'zgarishini kuzatish
+    useEffect(() => {
+        const handleHash = async () => {
+            const hash = window.location.hash;
+            if (hash === '#admin') {
+                setCurrentPage('admin_login');
+            } else if (hash.startsWith('#cert/')) {
+                const certId = hash.replace('#cert/', '');
+                if (certId) {
+                    try {
+                        const { getCertFromFirebase } = await import('./services/firebase');
+                        const certData = await getCertFromFirebase(certId);
+                        if (certData) {
+                            setAnalysisData(certData);
+                            setCurrentPage('certificate');
+                        }
+                    } catch (err) { console.warn('QR cert load error:', err); }
+                }
+            }
+        };
+        handleHash(); // check on mount
+        window.addEventListener('hashchange', handleHash);
+        return () => window.removeEventListener('hashchange', handleHash);
+    }, []);
 
     const [analysisData, setAnalysisData] = useState(() => {
         try {
@@ -99,6 +130,25 @@ function App() {
         setCurrentPage('viewing_saved_cert');
     }, []);
 
+    // Admin
+    const [adminData, setAdminData] = useState(null);
+
+    const handleOpenAdmin = useCallback(() => {
+        setCurrentPage('admin_login');
+    }, []);
+
+    const handleAdminLoginSuccess = useCallback((data) => {
+        setAdminData(data);
+        setCurrentPage('admin_dashboard');
+    }, []);
+
+    const handleAdminLogout = useCallback(() => {
+        setAdminData(null);
+        window.location.hash = '';
+        setSplashKey(k => k + 1);
+        setCurrentPage('splash');
+    }, []);
+
     return (
         <div className="app">
             <AnimatePresence mode="wait">
@@ -165,6 +215,43 @@ function App() {
                     />
                 )}
             </AnimatePresence>
+
+            {/* Admin pages — AnimatePresence tashqarisida */}
+            {currentPage === 'admin_login' && (
+                <AdminLoginPage
+                    onBack={handleRestart}
+                    onLoginSuccess={handleAdminLoginSuccess}
+                />
+            )}
+            {currentPage === 'admin_dashboard' && adminData && (
+                <AdminDashboard
+                    adminData={adminData}
+                    onLogout={handleAdminLogout}
+                    onViewCert={(certData) => {
+                        setAnalysisData(certData);
+                        setCurrentPage('admin_viewing_cert');
+                    }}
+                />
+            )}
+            {currentPage === 'admin_viewing_cert' && (
+                <CertificatePage
+                    key="admin_viewing_cert"
+                    analysisData={analysisData}
+                    onRestart={() => setCurrentPage('admin_dashboard')}
+                    customBackBtn={
+                        <button
+                            className="cert-action-btn cert-action-restart"
+                            onClick={() => setCurrentPage('admin_dashboard')}
+                            style={{ transform: 'scale(1)', transition: 'transform 0.1s' }}
+                            onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
+                            onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                        >
+                            ← Admin panelga qaytish
+                        </button>
+                    }
+                    skipAutoSave
+                />
+            )}
         </div>
     );
 }

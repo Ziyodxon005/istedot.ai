@@ -3,12 +3,22 @@ import { motion, AnimatePresence } from 'framer-motion';
 import HologramStage from './HologramStage';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../utils/personas';
-import { Mic, MicOff, X, Sparkles } from 'lucide-react';
+import { Mic, MicOff, X, Sparkles, User, School, PenLine, ChevronDown, ArrowRight } from 'lucide-react';
 import Particles from './Particles';
+import { getSchools } from '../services/firebase';
+import istedotLogo from '../assets/logo_istedot.png';
 
 const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
+    const [phase, setPhase] = useState('info'); // 'info' | 'conversation'
+    const [userInfo, setUserInfo] = useState({ name: '', surname: '', school: '', grade: '' });
+    const [schoolsList, setSchoolsList] = useState([]);
     const [isEnding, setIsEnding] = useState(false);
     const analysisReceivedRef = React.useRef(false);
+
+    // Maktablar ro'yxatini yuklash
+    useEffect(() => {
+        getSchools().then(list => setSchoolsList(list)).catch(() => {});
+    }, []);
 
     const {
         isLive,
@@ -32,15 +42,21 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
         isReadyToFinish,
     } = useGeminiLive();
 
-    // Show finish button ONLY after at least 7 meaningful questions (when psychological profile answers are sufficient and unhurried)
     const showFinishBtn = (isReadyToFinish || turnCount >= 7) && !isEnding;
-
     const persona = PERSONAS[personaId] || PERSONAS['general'];
 
-    useEffect(() => {
+    const startConversation = () => {
+        setPhase('conversation');
         if (persona) {
-            connect(null, persona.systemInstruction, persona.voice, false, onAnalysisReady);
+            connect(null, persona.systemInstruction, persona.voice, false, (data) => {
+                if (onAnalysisReady) {
+                    onAnalysisReady({ ...data, _userInfo: userInfo });
+                }
+            });
         }
+    };
+
+    useEffect(() => {
         return () => { disconnect(); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -49,20 +65,15 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
     useEffect(() => {
         if (analysisData && onAnalysisReady && !analysisReceivedRef.current) {
             analysisReceivedRef.current = true;
-
-            // Clear any pending timeout
             if (analysisReceivedRef._retryInterval) {
                 clearTimeout(analysisReceivedRef._retryInterval);
                 analysisReceivedRef._retryInterval = null;
             }
-
-            // Instantly transition to AnalysisPage
             disconnect();
-            onAnalysisReady(analysisData);
+            onAnalysisReady({ ...analysisData, _userInfo: userInfo });
         }
     }, [analysisData]); // eslint-disable-line
 
-    // Send finish command and trigger reliable analysis
     const handleFinishConversation = () => {
         if (isEnding) return;
         setIsEnding(true);
@@ -70,6 +81,84 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
         triggerAnalysis();
     };
 
+    // ==================== INFO PHASE ====================
+    if (phase === 'info') {
+        return (
+            <motion.div className="test-page" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <div className="test-bg-orbs">
+                    <div className="test-orb orb-1" />
+                    <div className="test-orb orb-2" />
+                    <div className="test-orb orb-3" />
+                </div>
+
+                <div className="test-info-container">
+                    <motion.button className="test-back-btn" onClick={onBack} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                        ← Orqaga
+                    </motion.button>
+
+                    <motion.div
+                        className="test-info-card"
+                        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 200, damping: 22 }}
+                    >
+                        <div className="test-info-header">
+                            <div className="test-info-icon-wrap">
+                                <img src={istedotLogo} alt="ISTEDOD AI" className="test-logo-img" />
+                            </div>
+                            <h1 className="test-info-title">Suhbat Testi</h1>
+                            <p className="test-info-subtitle">AI bilan jonli suhbat orqali qobiliyatlaringizni aniqlaymiz</p>
+                        </div>
+
+                        <div className="test-form">
+                            <div className="test-input-group">
+                                <label><User size={14} /><span>Ismingiz</span></label>
+                                <input type="text" placeholder="Masalan: Ali" value={userInfo.name} onChange={(e) => setUserInfo(prev => ({ ...prev, name: e.target.value }))} className="test-input" autoFocus />
+                            </div>
+                            <div className="test-input-group">
+                                <label><User size={14} /><span>Familiyangiz</span></label>
+                                <input type="text" placeholder="Masalan: Valiyev" value={userInfo.surname} onChange={(e) => setUserInfo(prev => ({ ...prev, surname: e.target.value }))} className="test-input" />
+                            </div>
+                            <div className="test-input-group">
+                                <label><School size={14} /><span>Maktabingiz</span></label>
+                                <div className="test-select-wrap">
+                                    <select className="test-input test-select" value={userInfo.school} onChange={(e) => setUserInfo(prev => ({ ...prev, school: e.target.value }))}>
+                                        <option value="">Maktabni tanlang...</option>
+                                        {schoolsList.map(s => (<option key={s.id} value={s.name}>{s.name}</option>))}
+                                    </select>
+                                    <ChevronDown size={16} className="test-select-arrow" />
+                                </div>
+                            </div>
+                            <div className="test-input-group">
+                                <label><PenLine size={14} /><span>Sinfingiz</span></label>
+                                <div className="test-select-wrap">
+                                    <select className="test-input test-select" value={userInfo.grade} onChange={(e) => setUserInfo(prev => ({ ...prev, grade: e.target.value }))}>
+                                        <option value="">Sinfni tanlang...</option>
+                                        {[1,2,3,4,5,6,7,8,9,10,11].map(g => (<option key={g} value={`${g}-sinf`}>{g}-sinf</option>))}
+                                    </select>
+                                    <ChevronDown size={16} className="test-select-arrow" />
+                                </div>
+                            </div>
+
+                            <motion.button
+                                className="test-start-btn"
+                                onClick={startConversation}
+                                disabled={!userInfo.name.trim() || !userInfo.surname.trim() || !userInfo.school.trim() || !userInfo.grade.trim()}
+                                whileHover={{ scale: 1.04 }}
+                                whileTap={{ scale: 0.96 }}
+                            >
+                                <Mic size={18} />
+                                <span>Suhbatni Boshlash</span>
+                                <ArrowRight size={18} />
+                            </motion.button>
+                        </div>
+                    </motion.div>
+                </div>
+            </motion.div>
+        );
+    }
+
+    // ==================== CONVERSATION PHASE ====================
     return (
         <motion.div
             className="conversation-page"
@@ -80,7 +169,6 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
         >
             <Particles />
 
-            {/* Header */}
             <header className="conversation-header">
                 <div className="conv-header-left">
                     <div className={`status-badge ${isReconnecting ? 'reconnecting' : isLive ? 'live' : 'offline'}`}>
@@ -94,14 +182,10 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
                 <div className="conversation-title">
                     <span className="conv-brand">ISTEDOD<span style={{ color: '#4db8ff' }}> AI</span></span>
                     <p>Kasbiy Yo'nalish Suhbati</p>
-                    {/* Turn progress indicator (8 stages) */}
                     {isLive && (
                         <div className="conv-turn-progress">
                             {Array.from({ length: 8 }, (_, i) => (
-                                <span
-                                    key={i}
-                                    className={`conv-turn-dot ${i < turnCount ? 'done' : ''}`}
-                                />
+                                <span key={i} className={`conv-turn-dot ${i < turnCount ? 'done' : ''}`} />
                             ))}
                         </div>
                     )}
@@ -119,7 +203,6 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
                 </div>
             </header>
 
-            {/* Main Stage */}
             <div className="conversation-stage">
                 <HologramStage
                     currentPersonaId={personaId}
@@ -132,9 +215,7 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
                 />
             </div>
 
-            {/* Controls */}
             <div className="conversation-controls">
-                {/* Mic */}
                 <motion.button
                     onClick={toggleMic}
                     className={`mic-indicator ${isMicMuted ? 'muted' : ''}`}
@@ -152,7 +233,6 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
                     {isLive && !isMicMuted && <span className="mic-pulse" />}
                 </motion.button>
 
-                {/* Finish conversation button — only when answers are sufficient */}
                 <AnimatePresence>
                     {showFinishBtn && (
                         <motion.button
@@ -174,27 +254,14 @@ const ConversationPage = ({ personaId, onBack, onAnalysisReady }) => {
                 </AnimatePresence>
             </div>
 
-            {/* Ending overlay */}
             <AnimatePresence>
                 {isEnding && (
-                    <motion.div
-                        className="ending-overlay"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                    >
-                        <motion.div
-                            className="ending-card"
-                            initial={{ opacity: 0, scale: 0.88, y: 24 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
-                        >
+                    <motion.div className="ending-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <motion.div className="ending-card" initial={{ opacity: 0, scale: 0.88, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}>
                             <div className="ending-spinner" />
                             <h3>{analysisData ? "Sertifikat tayyorlanmoqda..." : "Psixologik portret tuzilmoqda"}</h3>
                             <p>{analysisData ? "Barcha ma'lumotlar tahlil qilindi, natijani ko'rsatishga tayyorlanyapmiz..." : "Sun'iy intellekt suhbatingizni chuqur tahlil qilmoqda..."}</p>
-                            <div className="ending-dots">
-                                <span /><span /><span />
-                            </div>
+                            <div className="ending-dots"><span /><span /><span /></div>
                         </motion.div>
                     </motion.div>
                 )}
