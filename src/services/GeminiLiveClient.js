@@ -16,7 +16,7 @@ export class GeminiLiveClient {
         this.onAnalysisReadySignal = null;
     }
 
-    connect(systemInstruction, voiceName = 'Fenrir') {
+    connect(systemInstruction, voiceName = 'Sulafat') {
         this.voiceName = voiceName;
         const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
 

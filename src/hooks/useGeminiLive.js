@@ -101,7 +101,7 @@ export function useGeminiLive() {
         return false;
     }, [dispatchAnalysis]);
 
-    const connect = useCallback(async (initialApiKey, systemInstruction, voiceName = 'Fenrir', isRetry = false, onAnalysisReady = null) => {
+    const connect = useCallback(async (initialApiKey, systemInstruction, voiceName = 'Sulafat', isRetry = false, onAnalysisReady = null) => {
         // Prevent double-connect (React StrictMode or rapid calls)
         if (isConnectingRef.current && !isRetry) {
             console.log('connect() skipped — already connecting');
